@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional, List
 from app.schemas.analysis import TradePlanResponse
+
 
 class LiveAnalysisRequest(BaseModel):
     ticker: str = Field(..., description="EGX Stock Ticker, e.g. COMI")
@@ -9,6 +10,9 @@ class LiveAnalysisRequest(BaseModel):
     owns_stock: bool = Field(False, description="True if the user already holds a position")
     buy_price: Optional[float] = Field(None, description="Purchase price in EGP if already owned")
     shares_owned: Optional[int] = Field(None, description="Number of shares held if already owned")
+    bid_depth_qty: Optional[float] = Field(None, ge=0, description="Optional total buy-side depth from broker screen")
+    ask_depth_qty: Optional[float] = Field(None, ge=0, description="Optional total sell-side depth from broker screen")
+
 
 class PositionSizingResponse(BaseModel):
     capital: float
@@ -24,6 +28,48 @@ class PositionSizingResponse(BaseModel):
     max_expected_loss_egp: float
     actual_risk_pct: float
     actual_allocation_pct: float
+
+
+class OwnerAddOnSizingResponse(BaseModel):
+    current_position_value_egp: float
+    max_total_allocation_egp: float
+    remaining_allocation_egp: float
+    existing_risk_to_stop_egp: float
+    remaining_risk_budget_egp: float
+    suggested_add_on_shares: int
+    estimated_add_on_value_egp: float
+
+
+class OwnerAddOnResponse(BaseModel):
+    decision: str
+    decision_ar: str
+    reason_ar: str
+    entry_zone_min: Optional[float] = None
+    entry_zone_max: Optional[float] = None
+    sizing: Optional[OwnerAddOnSizingResponse] = None
+
+
+class CorporateEventResponse(BaseModel):
+    event_type: str
+    event_date: str
+    title_ar: str
+    summary_ar: str
+    impact_bias: str
+    source_name: str
+    source_url: str
+    days_to_event: int
+
+
+class MarketDepthResponse(BaseModel):
+    status: str
+    source: Optional[str] = None
+    buy_qty: Optional[float] = None
+    sell_qty: Optional[float] = None
+    imbalance_pct: Optional[float] = None
+    pressure: str
+    pressure_ar: str
+    note_ar: str
+
 
 class LiveAnalysisResponse(BaseModel):
     ticker: str
@@ -50,3 +96,6 @@ class LiveAnalysisResponse(BaseModel):
     trade_plan: Optional[TradePlanResponse] = None
     previous_plan: Optional[TradePlanResponse] = None
     position_sizing: Optional[PositionSizingResponse] = None
+    owner_add_on: Optional[OwnerAddOnResponse] = None
+    corporate_events: List[CorporateEventResponse] = []
+    market_depth: Optional[MarketDepthResponse] = None
