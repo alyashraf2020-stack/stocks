@@ -6,8 +6,12 @@ from app.services.security_master import SecurityMasterService
 from app.services.data_provider.manager import default_provider_manager
 from app.services.indicators import TechnicalIndicatorEngine
 from app.services.decision_engine import LiveDecisionEngine
+from app.services.owner_add_on import OwnerAddOnAdvisor
+from app.services.corporate_events import CorporateEventService
+from app.services.market_depth import MarketDepthService
 
 router = APIRouter()
+
 
 @router.post("", response_model=LiveAnalysisResponse)
 def analyze_live_price(req: LiveAnalysisRequest, db: Session = Depends(get_db)):
@@ -40,5 +44,30 @@ def analyze_live_price(req: LiveAnalysisRequest, db: Session = Depends(get_db)):
         latest_available_session=data_res.get("latest_session"),
         actual_provider=data_res.get("actual_provider")
     )
+
+    # 5. Existing holders get a SEPARATE add-on decision. This does not alter
+    # the main position-management decision (hold / take profit / exit).
+    owner_add_on = None
+    if req.owns_stock:
+        owner_add_on = OwnerAddOnAdvisor.evaluate(
+            current_price=req.current_price,
+            capital=req.capital,
+            shares_owned=req.shares_owned,
+            trade_plan=decision_result.get("trade_plan"),
+            sessions_behind=data_res.get("sessions_behind"),
+        )
+
+    # 6. Verified corporate events are context only; they never force a buy signal.
+    corporate_events = CorporateEventService.get_relevant_events(sec.ticker)
+
+    # 7. Market depth is optional context. No order-book data is fabricated.
+    market_depth = MarketDepthService.summarize(
+        bid_depth_qty=req.bid_depth_qty,
+        ask_depth_qty=req.ask_depth_qty,
+    )
+
+    decision_result["owner_add_on"] = owner_add_on
+    decision_result["corporate_events"] = corporate_events
+    decision_result["market_depth"] = market_depth
 
     return decision_result
