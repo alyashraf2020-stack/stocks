@@ -97,5 +97,5 @@ class LiveAnalysisResponse(BaseModel):
     previous_plan: Optional[TradePlanResponse] = None
     position_sizing: Optional[PositionSizingResponse] = None
     owner_add_on: Optional[OwnerAddOnResponse] = None
-    corporate_events: List[CorporateEventResponse] = []
+    corporate_events: List[CorporateEventResponse] = Field(default_factory=list)
     market_depth: Optional[MarketDepthResponse] = None
