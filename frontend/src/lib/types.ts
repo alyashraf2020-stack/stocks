@@ -80,6 +80,7 @@ export interface TradePlan {
   factor_breakdown?: Record<string, number> | null;
   plan_status?: string | null;
   new_entry_allowed?: boolean | null;
+  trigger_condition?: string | null;
 }
 
 export interface PositionSizing {
@@ -96,6 +97,47 @@ export interface PositionSizing {
   max_expected_loss_egp: number;
   actual_risk_pct: number;
   actual_allocation_pct: number;
+}
+
+export interface OwnerAddOnSizing {
+  current_position_value_egp: number;
+  max_total_allocation_egp: number;
+  remaining_allocation_egp: number;
+  existing_risk_to_stop_egp: number;
+  remaining_risk_budget_egp: number;
+  suggested_add_on_shares: number;
+  estimated_add_on_value_egp: number;
+}
+
+export interface OwnerAddOn {
+  decision: string;
+  decision_ar: string;
+  reason_ar: string;
+  entry_zone_min?: number | null;
+  entry_zone_max?: number | null;
+  sizing?: OwnerAddOnSizing | null;
+}
+
+export interface CorporateEvent {
+  event_type: string;
+  event_date: string;
+  title_ar: string;
+  summary_ar: string;
+  impact_bias: string;
+  source_name: string;
+  source_url: string;
+  days_to_event: number;
+}
+
+export interface MarketDepthSummary {
+  status: string;
+  source?: string | null;
+  buy_qty?: number | null;
+  sell_qty?: number | null;
+  imbalance_pct?: number | null;
+  pressure: string;
+  pressure_ar: string;
+  note_ar: string;
 }
 
 export interface LiveAnalysisResult {
@@ -123,6 +165,9 @@ export interface LiveAnalysisResult {
   trade_plan?: TradePlan | null;
   previous_plan?: TradePlan | null;
   position_sizing?: PositionSizing | null;
+  owner_add_on?: OwnerAddOn | null;
+  corporate_events?: CorporateEvent[];
+  market_depth?: MarketDepthSummary | null;
 }
 
 export interface MarketStatus {
