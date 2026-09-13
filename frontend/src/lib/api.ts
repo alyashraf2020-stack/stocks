@@ -59,6 +59,8 @@ export async function postLiveAnalysis(data: {
   owns_stock?: boolean;
   buy_price?: number;
   shares_owned?: number;
+  bid_depth_qty?: number;
+  ask_depth_qty?: number;
 }): Promise<LiveAnalysisResult> {
   const res = await fetch(`${API_BASE}/egx/live-analysis`, {
     method: "POST",
