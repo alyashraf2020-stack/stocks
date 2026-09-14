@@ -52,6 +52,33 @@ export async function getStockChart(ticker: string, range: string = "3M"): Promi
   return res.json();
 }
 
+export async function submitManualEod(data: {
+  ticker: string;
+  session_date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}): Promise<{
+  status: string;
+  ticker: string;
+  session_date: string;
+  actual_provider: string;
+  message_ar: string;
+}> {
+  const res = await fetch(`${API_BASE}/egx/live-analysis/manual-eod`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || "تعذر حفظ بيانات الجلسة المكتملة");
+  }
+  return res.json();
+}
+
 export async function postLiveAnalysis(data: {
   ticker: string;
   current_price: number;
