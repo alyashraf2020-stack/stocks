@@ -50,6 +50,7 @@ export default function DecisionCard({
     owner_add_on,
     corporate_events,
     market_depth,
+    breakout_entry,
   } = result;
 
   const isOwner = ownsStockProp !== undefined ? ownsStockProp : Boolean(result.owns_stock);
@@ -172,6 +173,28 @@ export default function DecisionCard({
         </div>
       )}
 
+      {breakout_entry && breakout_entry.status === "VALID" && (
+        <div className="bg-sky-500/5 border border-sky-500/20 rounded-xl p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-bold text-sky-300"><TrendingUp className="w-4 h-4" /><span>{isOwner ? "لو السهم ما نزلش — سيناريو تعزيز بالاختراق" : "لو السهم ما نزلش — سيناريو دخول بالاختراق"}</span></div>
+            <span className={`text-xs font-black px-3 py-1 rounded-full border ${breakout_entry.actionable ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-400 border-amber-500/30"}`}>{breakout_entry.decision_ar}</span>
+          </div>
+          <p className="text-xs text-gray-300 leading-relaxed">{breakout_entry.reason_ar}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+            <Metric label="المقاومة الحديثة" value={breakout_entry.resistance_level != null ? `${breakout_entry.resistance_level.toFixed(2)} ج.م` : "—"} />
+            <Metric label="سعر تفعيل الاختراق" value={breakout_entry.trigger_price != null ? `${breakout_entry.trigger_price.toFixed(2)} ج.م` : "—"} accent="text-sky-300" />
+            <Metric label="نطاق دخول الاختراق" value={breakout_entry.entry_zone_min != null && breakout_entry.entry_zone_max != null ? `${breakout_entry.entry_zone_min.toFixed(2)} – ${breakout_entry.entry_zone_max.toFixed(2)} ج.م` : "—"} />
+            <Metric label="وقف سيناريو الاختراق" value={breakout_entry.stop_loss != null ? `${breakout_entry.stop_loss.toFixed(2)} ج.م` : "—"} accent="text-rose-300" />
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <Metric label="هدف اختراق 1" value={breakout_entry.target_1 != null ? `${breakout_entry.target_1.toFixed(2)} ج.م` : "—"} />
+            <Metric label="هدف اختراق 2" value={breakout_entry.target_2 != null ? `${breakout_entry.target_2.toFixed(2)} ج.م` : "—"} />
+            <Metric label="هدف اختراق 3" value={breakout_entry.target_3 != null ? `${breakout_entry.target_3.toFixed(2)} ج.م` : "—"} />
+          </div>
+          {breakout_entry.confirmation_ar && <p className="text-[11px] text-gray-500">{breakout_entry.confirmation_ar}</p>}
+        </div>
+      )}
+
       {trade_plan && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -181,7 +204,7 @@ export default function DecisionCard({
           </div>
 
           {isNoSetup ? (
-            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 text-center space-y-1"><span className="text-sm font-bold text-amber-400 block">لا توجد فرصة دخول صالحة حاليًا</span><span className="text-xs text-gray-400 block">انتظر تكوين إعداد فني جديد من البيانات القادمة بعد اكتمال الأهداف السابقة والتمدد السعري.</span></div>
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 text-center space-y-1"><span className="text-sm font-bold text-amber-400 block">لا توجد فرصة دخول صالحة حاليًا</span><span className="text-xs text-gray-400 block">لا يوجد Pullback صالح حاليًا. استخدم سيناريو الاختراق أعلاه إذا لم يتراجع السهم، ولا تطارد السعر خارج نطاقه.</span></div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <div className={`${isTargetsCompleted ? "bg-amber-500/5 border-amber-500/20" : "bg-surfaceHover/70 border-surfaceBorder"} border rounded-xl p-3`}>
