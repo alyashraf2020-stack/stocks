@@ -2,11 +2,9 @@ import datetime
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from app.services.data_provider.base import BaseHistoricalProvider
-from app.services.data_provider.egxapi_provider import EGXAPIProvider
 from app.services.data_provider.yahoo_provider import YahooEGXProvider
 from app.services.data_provider.investing_provider import InvestingHistoricalProvider
 from app.services.data_provider.investing_legacy_provider import InvestingLegacySearchProvider
-from app.services.data_provider.egx_direct_provider import EGIDProvider, EGXDirectProvider
 from app.services.data_provider.stooq_provider import StooqEGXProvider
 from app.services.validator import CandleValidator
 from app.services.egx_calendar import (
@@ -26,33 +24,14 @@ class ProviderManager:
         primary_provider: Optional[BaseHistoricalProvider] = None,
         fallback_providers: Optional[List[BaseHistoricalProvider]] = None
     ):
-        # EGXAPI is the preferred source when a local key is configured. If the
-        # key is missing/unavailable, the existing real providers stay available
-        # as fallbacks. Tests can still inject an explicit primary provider.
-        if primary_provider is not None:
-            self.primary_provider = primary_provider
-            self.fallback_providers = fallback_providers or []
-        else:
-            egxapi = EGXAPIProvider()
-            yahoo = YahooEGXProvider()
-            if egxapi.is_configured:
-                self.primary_provider = egxapi
-                default_fallbacks: List[BaseHistoricalProvider] = [
-                    yahoo,
-                    InvestingHistoricalProvider(),
-                    InvestingLegacySearchProvider(),
-                    EGIDProvider(),
-                    StooqEGXProvider(),
-                ]
-            else:
-                self.primary_provider = yahoo
-                default_fallbacks = [
-                    InvestingHistoricalProvider(),
-                    InvestingLegacySearchProvider(),
-                    EGIDProvider(),
-                    StooqEGXProvider(),
-                ]
-            self.fallback_providers = fallback_providers or default_fallbacks
+        # No API key or secret is required. The platform uses public market-data
+        # sources only and keeps the strict zero-session-lag rule.
+        self.primary_provider: BaseHistoricalProvider = primary_provider or YahooEGXProvider()
+        self.fallback_providers: List[BaseHistoricalProvider] = fallback_providers or [
+            InvestingHistoricalProvider(),
+            InvestingLegacySearchProvider(),
+            StooqEGXProvider(),
+        ]
 
     def _security_english_name(self, db: Optional[Session], ticker: str) -> Optional[str]:
         if db is None:
