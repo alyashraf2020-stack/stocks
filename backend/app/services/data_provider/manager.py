@@ -1,5 +1,5 @@
 import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 from app.services.data_provider.base import BaseHistoricalProvider
 from app.services.data_provider.yahoo_provider import YahooEGXProvider
@@ -20,6 +20,13 @@ from app.models.security import EGXSecurity
 
 
 class ProviderManager:
+    # A single public source is not allowed to splice a very large one-session
+    # price discontinuity into an otherwise continuous EOD series. Such jumps can
+    # be caused by stale feeds, reference-price adjustments or corporate actions.
+    # We require an independent provider to corroborate the same completed date.
+    MAX_UNCORROBORATED_CLOSE_MOVE = 0.25
+    CORROBORATION_PRICE_TOLERANCE = 0.03
+
     def __init__(
         self,
         primary_provider: Optional[BaseHistoricalProvider] = None,
@@ -36,6 +43,37 @@ class ProviderManager:
             InvestingLegacySearchProvider(),
             StooqEGXProvider(),
         ]
+
+    @classmethod
+    def _is_large_close_jump(cls, previous_close: Any, bar: Dict[str, Any]) -> bool:
+        try:
+            prev = float(previous_close)
+            close = float(bar.get("close"))
+        except (TypeError, ValueError):
+            return True
+        if prev <= 0 or close <= 0:
+            return True
+        return abs(close / prev - 1.0) > cls.MAX_UNCORROBORATED_CLOSE_MOVE
+
+    @classmethod
+    def _bars_corroborate(cls, first: Dict[str, Any], second: Dict[str, Any]) -> bool:
+        if first.get("session_date") != second.get("session_date"):
+            return False
+
+        for field in ("open", "high", "low", "close"):
+            try:
+                a = float(first.get(field))
+                b = float(second.get(field))
+            except (TypeError, ValueError):
+                return False
+            if a <= 0 or b <= 0:
+                return False
+            baseline = max(abs(a), abs(b))
+            if baseline == 0:
+                return False
+            if abs(a - b) / baseline > cls.CORROBORATION_PRICE_TOLERANCE:
+                return False
+        return True
 
     def _security_english_name(self, db: Optional[Session], ticker: str) -> Optional[str]:
         if db is None:
@@ -92,6 +130,24 @@ class ProviderManager:
                 .order_by(EGXCandle.session_date.asc())
                 .all()
             )
+
+            # Repair previously cached single-source outliers automatically. A
+            # user-verified EOD candle is intentionally not deleted here.
+            if len(cached_rows) >= 2:
+                last_cached = cached_rows[-1]
+                previous_cached = cached_rows[-2]
+                is_user_verified = last_cached.actual_provider == "USER_VERIFIED_EOD"
+                if (
+                    not is_user_verified
+                    and self._is_large_close_jump(previous_cached.close, last_cached.to_dict())
+                ):
+                    try:
+                        db.delete(last_cached)
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+                    cached_rows = cached_rows[:-1]
+
             if cached_rows and len(cached_rows) >= 20:
                 last_cached = cached_rows[-1]
                 last_cached_date = datetime.date.fromisoformat(last_cached.session_date)
@@ -122,6 +178,7 @@ class ProviderManager:
         best_bars: List[Dict[str, Any]] = []
         best_provider: Optional[str] = None
         best_sessions_behind: Optional[int] = None
+        current_outlier_candidates: List[Tuple[str, List[Dict[str, Any]]]] = []
 
         for provider in all_providers:
             try:
@@ -142,6 +199,29 @@ class ProviderManager:
                 p_sessions_behind = calculate_sessions_behind(p_latest_date, now_cairo)
 
                 if p_sessions_behind == 0:
+                    latest_is_outlier = (
+                        len(val_p_bars) >= 2
+                        and self._is_large_close_jump(
+                            val_p_bars[-2].get("close"),
+                            val_p_bars[-1],
+                        )
+                    )
+                    if latest_is_outlier:
+                        corroborated_by = None
+                        for candidate_provider, candidate_bars in current_outlier_candidates:
+                            if candidate_bars and self._bars_corroborate(
+                                candidate_bars[-1], val_p_bars[-1]
+                            ):
+                                corroborated_by = candidate_provider
+                                break
+                        if corroborated_by is not None:
+                            best_bars = val_p_bars
+                            best_provider = f"{provider.provider_name} + {corroborated_by} confirmed"
+                            best_sessions_behind = 0
+                            break
+                        current_outlier_candidates.append((provider.provider_name, val_p_bars))
+                        continue
+
                     best_bars = val_p_bars
                     best_provider = provider.provider_name
                     best_sessions_behind = 0
@@ -157,6 +237,8 @@ class ProviderManager:
                 continue
 
         if best_bars and best_sessions_behind is not None and best_sessions_behind > 0:
+            pending_outlier: Optional[Tuple[Dict[str, Any], str]] = None
+
             for fallback in self.fallback_providers:
                 try:
                     missing_bar = self._fetch_provider_session_bar(
@@ -165,18 +247,42 @@ class ProviderManager:
                         session_date=expected_session_str,
                         english_name=english_name,
                     )
-                    if missing_bar is not None:
-                        validated_missing = CandleValidator.validate_bar(missing_bar)
-                        if validated_missing.get("hlcv_status") == "VALID":
-                            if not any(
-                                b.get("session_date") == validated_missing.get("session_date")
-                                for b in best_bars
-                            ):
-                                best_bars.append(validated_missing)
-                                best_bars.sort(key=lambda x: x["session_date"])
-                            best_sessions_behind = 0
-                            best_provider = f"{best_provider} + {missing_bar.get('actual_provider', fallback.provider_name)}"
-                            break
+                    if missing_bar is None:
+                        continue
+
+                    validated_missing = CandleValidator.validate_bar(missing_bar)
+                    if validated_missing.get("hlcv_status") != "VALID":
+                        continue
+
+                    previous_close = best_bars[-1].get("close")
+                    if self._is_large_close_jump(previous_close, validated_missing):
+                        if pending_outlier is None:
+                            pending_outlier = (validated_missing, fallback.provider_name)
+                            continue
+
+                        first_bar, first_provider = pending_outlier
+                        if not self._bars_corroborate(first_bar, validated_missing):
+                            continue
+
+                        accepted_bar = validated_missing
+                        accepted_provider = (
+                            f"{first_provider} + {fallback.provider_name} confirmed discontinuity"
+                        )
+                    else:
+                        accepted_bar = validated_missing
+                        accepted_provider = missing_bar.get(
+                            "actual_provider", fallback.provider_name
+                        )
+
+                    if not any(
+                        b.get("session_date") == accepted_bar.get("session_date")
+                        for b in best_bars
+                    ):
+                        best_bars.append(accepted_bar)
+                        best_bars.sort(key=lambda x: x["session_date"])
+                    best_sessions_behind = 0
+                    best_provider = f"{best_provider} + {accepted_provider}"
+                    break
                 except Exception:
                     continue
 
