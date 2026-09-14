@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.live_analysis import LiveAnalysisRequest, LiveAnalysisResponse
+from app.schemas.live_analysis import (
+    LiveAnalysisRequest,
+    LiveAnalysisResponse,
+    ManualEODRequest,
+    ManualEODResponse,
+)
 from app.services.security_master import SecurityMasterService
 from app.services.data_provider.manager import default_provider_manager
 from app.services.indicators import TechnicalIndicatorEngine
@@ -10,8 +15,110 @@ from app.services.owner_add_on import OwnerAddOnAdvisor
 from app.services.corporate_events import CorporateEventService
 from app.services.market_depth import MarketDepthService
 from app.services.breakout_entry import BreakoutEntryAdvisor
+from app.services.validator import CandleValidator
+from app.models.candle import EGXCandle
 
 router = APIRouter()
+
+
+@router.post("/manual-eod", response_model=ManualEODResponse)
+def save_manual_eod(req: ManualEODRequest, db: Session = Depends(get_db)):
+    sec = SecurityMasterService.get_by_ticker(db, req.ticker)
+    if not sec:
+        raise HTTPException(status_code=400, detail="السهم غير مدرج في البورصة المصرية.")
+
+    data_res = default_provider_manager.get_analytical_bars(
+        sec.ticker,
+        limit=250,
+        db=db,
+        force_refresh=True,
+    )
+
+    expected_session = data_res.get("expected_latest_session")
+    if not expected_session:
+        raise HTTPException(status_code=400, detail="تعذر تحديد آخر جلسة مكتملة متوقعة.")
+
+    if data_res.get("sessions_behind") == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="البيانات محدثة بالفعل ولا تحتاج إدخال جلسة يدويًا.",
+        )
+
+    if req.session_date != expected_session:
+        raise HTTPException(
+            status_code=400,
+            detail=f"يجب أن تكون الجلسة المدخلة هي الجلسة المتوقعة بالضبط: {expected_session}",
+        )
+
+    raw_bar = {
+        "ticker": sec.ticker,
+        "session_date": req.session_date,
+        "open": req.open,
+        "high": req.high,
+        "low": req.low,
+        "close": req.close,
+        "volume": req.volume,
+        "actual_provider": "USER_VERIFIED_EOD",
+    }
+    validated = CandleValidator.validate_bar(raw_bar)
+
+    if validated.get("hlcv_status") != "VALID" or validated.get("open_status") != "RAW_OPEN":
+        raise HTTPException(
+            status_code=400,
+            detail="بيانات الجلسة غير منطقية. يجب أن يكون Low <= Open/Close <= High وأن تكون القيم موجبة والحجم غير سالب.",
+        )
+
+    existing = (
+        db.query(EGXCandle)
+        .filter(
+            EGXCandle.ticker == sec.ticker,
+            EGXCandle.session_date == req.session_date,
+        )
+        .first()
+    )
+
+    if existing and existing.actual_provider != "USER_VERIFIED_EOD":
+        raise HTTPException(
+            status_code=409,
+            detail="توجد بالفعل جلسة محفوظة من مزود بيانات لهذا التاريخ، ولن يتم استبدالها يدويًا.",
+        )
+
+    if existing:
+        existing.open = req.open
+        existing.high = req.high
+        existing.low = req.low
+        existing.close = req.close
+        existing.volume = req.volume
+        existing.actual_provider = "USER_VERIFIED_EOD"
+        existing.validation_status = validated["validation_status"]
+    else:
+        db.add(
+            EGXCandle(
+                ticker=sec.ticker,
+                session_date=req.session_date,
+                open=req.open,
+                high=req.high,
+                low=req.low,
+                close=req.close,
+                volume=req.volume,
+                actual_provider="USER_VERIFIED_EOD",
+                validation_status=validated["validation_status"],
+            )
+        )
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="تعذر حفظ بيانات الجلسة يدويًا.")
+
+    return {
+        "status": "SUCCESS",
+        "ticker": sec.ticker,
+        "session_date": req.session_date,
+        "actual_provider": "USER_VERIFIED_EOD",
+        "message_ar": "تم حفظ الجلسة المدخلة يدويًا والتحقق من OHLCV. أعد التحليل الآن.",
+    }
 
 
 @router.post("", response_model=LiveAnalysisResponse)
