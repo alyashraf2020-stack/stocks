@@ -71,6 +71,24 @@ class MarketDepthResponse(BaseModel):
     note_ar: str
 
 
+class BreakoutEntryResponse(BaseModel):
+    status: str
+    decision: str
+    decision_ar: str
+    reason_ar: str
+    actionable: bool
+    resistance_level: Optional[float] = None
+    trigger_price: Optional[float] = None
+    entry_zone_min: Optional[float] = None
+    entry_zone_max: Optional[float] = None
+    stop_loss: Optional[float] = None
+    target_1: Optional[float] = None
+    target_2: Optional[float] = None
+    target_3: Optional[float] = None
+    confirmation_ar: Optional[str] = None
+    uses_manual_price_for_levels: bool = False
+
+
 class LiveAnalysisResponse(BaseModel):
     ticker: str
     current_price: float
@@ -99,3 +117,4 @@ class LiveAnalysisResponse(BaseModel):
     owner_add_on: Optional[OwnerAddOnResponse] = None
     corporate_events: List[CorporateEventResponse] = Field(default_factory=list)
     market_depth: Optional[MarketDepthResponse] = None
+    breakout_entry: Optional[BreakoutEntryResponse] = None
