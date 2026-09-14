@@ -6,6 +6,15 @@ echo ========================================
 echo        Starting EGX Platform...
 echo ========================================
 
+rem Pull the newest code automatically when Git is available.
+where git >nul 2>&1
+if not errorlevel 1 (
+    echo Checking for updates...
+    pushd "%ROOT%"
+    git pull --ff-only
+    popd
+)
+
 rem Start backend only if port 8000 is not already listening.
 netstat -ano | findstr ":8000" | findstr "LISTENING" >nul
 if errorlevel 1 (
