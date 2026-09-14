@@ -5,15 +5,11 @@ from app.services.data_provider.investing_provider import InvestingHistoricalPro
 
 
 class InvestingLegacySearchProvider(InvestingHistoricalProvider):
-    """Second real Investing resolver for EGX symbols.
+    """Second public Investing resolver for EGX symbols.
 
-    Investing has used more than one public search endpoint over time. The main
-    provider uses /api/search/v2/search; this fallback tries the older /api/search
-    endpoints which return quote objects containing id/url/symbol/exchange/flag.
-
-    Historical candles are still fetched by the canonical Investing chart
-    endpoint inherited from InvestingHistoricalProvider. No synthetic bars,
-    forward fill, or manual prices are used.
+    The inherited historical/region fallback remains the data path; this class
+    only supplies an alternate symbol resolver when Investing's v2 search does
+    not identify the EGX security.
     """
 
     @property
@@ -27,7 +23,6 @@ class InvestingLegacySearchProvider(InvestingHistoricalProvider):
     ) -> Optional[int]:
         clean_ticker = ticker.strip().upper()
 
-        # Preserve fast-path mappings and anything already resolved by v2.
         resolved = super()._resolve_instrument_id(clean_ticker, english_name)
         if resolved:
             return resolved
@@ -63,6 +58,7 @@ class InvestingLegacySearchProvider(InvestingHistoricalProvider):
                         continue
 
                     best_id = None
+                    best_url = None
                     best_score = -1
 
                     for item in quotes:
@@ -104,11 +100,12 @@ class InvestingLegacySearchProvider(InvestingHistoricalProvider):
                         if score > best_score:
                             best_score = score
                             best_id = instrument_id
+                            best_url = self._candidate_url(item)
 
-                    # Exact ticker alone is enough for this legacy endpoint; Egypt
-                    # context raises confidence further when available.
                     if best_id is not None and best_score >= 120:
                         self._resolved_cache[clean_ticker] = best_id
+                        if best_url:
+                            self._resolved_url_cache[clean_ticker] = best_url
                         return best_id
 
         except Exception:
