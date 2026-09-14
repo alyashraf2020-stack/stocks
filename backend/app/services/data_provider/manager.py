@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from app.services.data_provider.base import BaseHistoricalProvider
 from app.services.data_provider.yahoo_provider import YahooEGXProvider
+from app.services.data_provider.directfn_provider import DirectFNCompletedSessionProvider
 from app.services.data_provider.investing_provider import InvestingHistoricalProvider
 from app.services.data_provider.investing_legacy_provider import InvestingLegacySearchProvider
 from app.services.data_provider.stooq_provider import StooqEGXProvider
@@ -28,6 +29,9 @@ class ProviderManager:
         # sources only and keeps the strict zero-session-lag rule.
         self.primary_provider: BaseHistoricalProvider = primary_provider or YahooEGXProvider()
         self.fallback_providers: List[BaseHistoricalProvider] = fallback_providers or [
+            # DirectFN exposes the latest completed EGX trading table with an
+            # explicit market date, so try it first for a missing latest session.
+            DirectFNCompletedSessionProvider(),
             InvestingHistoricalProvider(),
             InvestingLegacySearchProvider(),
             StooqEGXProvider(),
@@ -171,7 +175,7 @@ class ProviderManager:
                                 best_bars.append(validated_missing)
                                 best_bars.sort(key=lambda x: x["session_date"])
                             best_sessions_behind = 0
-                            best_provider = f"{best_provider} + {fallback.provider_name}"
+                            best_provider = f"{best_provider} + {missing_bar.get('actual_provider', fallback.provider_name)}"
                             break
                 except Exception:
                     continue
