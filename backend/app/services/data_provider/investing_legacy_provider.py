@@ -9,7 +9,7 @@ class InvestingLegacySearchProvider(InvestingHistoricalProvider):
 
     The inherited historical/region fallback remains the data path; this class
     only supplies an alternate symbol resolver when Investing's v2 search does
-    not identify the EGX security.
+    not identify the EGX security or does not expose a usable quote-page URL.
     """
 
     @property
@@ -23,9 +23,19 @@ class InvestingLegacySearchProvider(InvestingHistoricalProvider):
     ) -> Optional[int]:
         clean_ticker = ticker.strip().upper()
 
-        resolved = super()._resolve_instrument_id(clean_ticker, english_name)
-        if resolved:
-            return resolved
+        cached_id = self._resolved_cache.get(clean_ticker)
+        cached_url = self._resolved_url_cache.get(clean_ticker)
+        if cached_id is not None and cached_url:
+            return cached_id
+
+        # If v2 has not resolved anything yet, give it the first chance. If it
+        # resolves only an id without a page URL, continue into the legacy search
+        # so the regional historical-page fallback can still be used.
+        if cached_id is None:
+            resolved = super()._resolve_instrument_id(clean_ticker, english_name)
+            if resolved and self._resolved_url_cache.get(clean_ticker):
+                return resolved
+            cached_id = resolved
 
         queries = [clean_ticker]
         if english_name:
@@ -109,6 +119,6 @@ class InvestingLegacySearchProvider(InvestingHistoricalProvider):
                         return best_id
 
         except Exception:
-            return None
+            return cached_id
 
-        return None
+        return cached_id
