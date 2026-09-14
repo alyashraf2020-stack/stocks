@@ -14,6 +14,24 @@ class LiveAnalysisRequest(BaseModel):
     ask_depth_qty: Optional[float] = Field(None, ge=0, description="Optional total sell-side depth from broker screen")
 
 
+class ManualEODRequest(BaseModel):
+    ticker: str = Field(..., description="EGX ticker")
+    session_date: str = Field(..., description="Completed EGX session date in YYYY-MM-DD")
+    open: float = Field(..., gt=0)
+    high: float = Field(..., gt=0)
+    low: float = Field(..., gt=0)
+    close: float = Field(..., gt=0)
+    volume: float = Field(..., ge=0)
+
+
+class ManualEODResponse(BaseModel):
+    status: str
+    ticker: str
+    session_date: str
+    actual_provider: str
+    message_ar: str
+
+
 class PositionSizingResponse(BaseModel):
     capital: float
     planning_entry: float
