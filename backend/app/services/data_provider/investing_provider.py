@@ -3,7 +3,7 @@ import html as html_lib
 import re
 import time
 from typing import List, Dict, Any, Optional, Iterable
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 from app.services.data_provider.base import BaseHistoricalProvider
 
@@ -16,14 +16,23 @@ INVESTING_INSTRUMENT_MAP: Dict[str, int] = {
 
 
 class InvestingHistoricalProvider(BaseHistoricalProvider):
-    """
-    Real fallback provider for EGX equities using Investing data.
+    """Public Investing fallback for EGX equities.
 
-    Resolution is generic for the whole EGX Security Master. Historical chart
-    data is preferred. If the chart feed is exactly missing the latest completed
-    session, fetch_session_bar_for_security can recover a genuine CLOSED-session
-    OHLCV bar from Investing realtime/quote data. No mock or synthetic candles.
+    The normal chart feed is preferred. If it is missing the latest completed
+    EGX session, regional Investing historical pages are checked for an explicit
+    row for that exact session date. A row is accepted only when full OHLCV is
+    present and internally valid. Live/manual prices are never converted into
+    EOD candles.
     """
+
+    REGIONAL_HOSTS = (
+        "au.investing.com",
+        "www.investing.com",
+        "ca.investing.com",
+        "uk.investing.com",
+        "sa.investing.com",
+        "ng.investing.com",
+    )
 
     _resolved_cache: Dict[str, int] = {}
     _resolved_url_cache: Dict[str, str] = {}
@@ -88,7 +97,6 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
             return value
         if value.startswith("/"):
             return f"https://www.investing.com{value}"
-        # Search responses often expose only a slug.
         if "/" not in value:
             return f"https://www.investing.com/equities/{value}"
         return f"https://www.investing.com/{value.lstrip('/')}"
@@ -106,7 +114,6 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
             or item.get("shortName")
             or ""
         ).strip().upper()
-
         country = cls._norm(item.get("country") or item.get("country_name") or item.get("countryName"))
         exchange = cls._norm(item.get("exchange") or item.get("exchange_name") or item.get("exchangeName"))
         item_type = cls._norm(item.get("type") or item.get("instrument_type") or item.get("instrumentType"))
@@ -119,8 +126,8 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
             or item.get("pairName")
         )
 
-        score = 0
         clean_ticker = ticker.strip().upper()
+        score = 0
         if symbol == clean_ticker:
             score += 120
         elif clean_ticker and clean_ticker.lower() in cls._norm(symbol):
@@ -142,9 +149,7 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
                 if len(token) >= 4 and token not in generic
             }
             candidate_text = f"{name} {cls._norm(symbol)}"
-            overlap = sum(1 for token in wanted_tokens if token in candidate_text)
-            score += min(overlap * 18, 72)
-
+            score += min(sum(1 for token in wanted_tokens if token in candidate_text) * 18, 72)
         return score
 
     def _resolve_metadata(self, ticker: str, english_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -165,15 +170,13 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
 
         best: Optional[Dict[str, Any]] = None
         best_score = -1
-
         try:
             from curl_cffi import requests
             session = requests.Session(impersonate="chrome124")
-
             for query in queries:
-                search_url = f"https://api.investing.com/api/search/v2/search?q={quote_plus(query)}"
+                url = f"https://api.investing.com/api/search/v2/search?q={quote_plus(query)}"
                 try:
-                    response = session.get(search_url, headers=self._headers(), timeout=15)
+                    response = session.get(url, headers=self._headers(), timeout=15)
                     if response.status_code != 200:
                         continue
                     payload = response.json()
@@ -188,7 +191,6 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
                     if score > best_score:
                         best_score = score
                         best = {"id": instrument_id, "url": self._candidate_url(item)}
-
                 if best_score >= 170:
                     break
         except Exception:
@@ -206,10 +208,7 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
         return int(meta["id"]) if meta else None
 
     def fetch_historical_bars_for_security(
-        self,
-        ticker: str,
-        english_name: Optional[str] = None,
-        limit: int = 250,
+        self, ticker: str, english_name: Optional[str] = None, limit: int = 250
     ) -> List[Dict[str, Any]]:
         clean_ticker = ticker.strip().upper()
         instrument_id = self._resolve_instrument_id(clean_ticker, english_name)
@@ -222,12 +221,7 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
 
     def _fetch_chart(self, clean_ticker: str, instrument_id: int, limit: int) -> List[Dict[str, Any]]:
         allowed_points = [60, 70, 90, 110, 120, 140, 160]
-        points = 160
-        for pt in allowed_points:
-            if pt >= limit:
-                points = pt
-                break
-
+        points = next((pt for pt in allowed_points if pt >= limit), 160)
         url = (
             f"https://api.investing.com/api/financialdata/{instrument_id}/historical/chart/"
             f"?interval=P1D&pointscount={points}"
@@ -241,8 +235,7 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
                 if response.status_code != 200:
                     time.sleep(1)
                     continue
-                payload = response.json()
-                raw_bars = payload.get("data", [])
+                raw_bars = response.json().get("data", [])
                 if not raw_bars:
                     return []
 
@@ -252,8 +245,7 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
                     if not isinstance(item, (list, tuple)) or len(item) < 6:
                         continue
                     try:
-                        ts_ms = item[0]
-                        session_dt = datetime.datetime.fromtimestamp(ts_ms / 1000, datetime.timezone.utc)
+                        session_dt = datetime.datetime.fromtimestamp(float(item[0]) / 1000, datetime.timezone.utc)
                         open_ = float(item[1])
                         high = float(item[2])
                         low = float(item[3])
@@ -276,7 +268,6 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
                         "actual_provider": self.provider_name,
                         "fetched_at": now_iso,
                     })
-
                 bars.sort(key=lambda x: x["session_date"])
                 return bars[-limit:] if len(bars) > limit else bars
             except Exception:
@@ -287,8 +278,8 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
     def _to_number(value: Any) -> Optional[float]:
         if value is None:
             return None
-        text = str(value).strip().replace(",", "").replace(" ", " ")
-        if not text:
+        text = str(value).strip().replace(",", "").replace("\u00a0", " ")
+        if not text or text in ("-", "—"):
             return None
         match = re.search(r"(-?\d+(?:\.\d+)?)\s*([KMB])?", text, re.IGNORECASE)
         if not match:
@@ -304,130 +295,124 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
         return number
 
     @classmethod
-    def _extract_quote_dict(cls, payload: Any) -> Optional[Dict[str, float]]:
-        aliases = {
-            "close": ("last", "last_price", "lastPrice", "close", "price"),
-            "open": ("open", "open_price", "openPrice"),
-            "high": ("high", "day_high", "dayHigh", "highPrice"),
-            "low": ("low", "day_low", "dayLow", "lowPrice"),
-            "volume": ("volume", "vol", "turnoverVolume"),
-        }
-        for item in cls._walk_dicts(payload):
-            result: Dict[str, float] = {}
-            for out_key, keys in aliases.items():
-                for key in keys:
-                    if key in item:
-                        number = cls._to_number(item.get(key))
-                        if number is not None:
-                            result[out_key] = number
-                            break
-            if all(k in result for k in ("close", "open", "high", "low", "volume")):
-                return result
-        return None
+    def _regional_historical_urls(cls, base_url: str) -> List[str]:
+        parsed = urlparse(base_url)
+        path = parsed.path.rstrip("/")
+        if not path:
+            return []
+        historical_path = path if path.endswith("-historical-data") else f"{path}-historical-data"
+        return [f"https://{host}{historical_path}" for host in cls.REGIONAL_HOSTS]
 
     @staticmethod
-    def _egx_session_may_be_live_now() -> bool:
-        # Conservative guard: never convert a live intraday quote into an EOD bar.
-        # EGX regular trading is inside this window; wider bounds are intentional.
-        cairo_tz = datetime.timezone(datetime.timedelta(hours=3))
-        now = datetime.datetime.now(cairo_tz)
-        if now.weekday() in (6, 0, 1, 2, 3):  # Sun-Thu
-            minutes = now.hour * 60 + now.minute
-            return (9 * 60 + 30) <= minutes <= (15 * 60)
-        return False
+    def _date_labels(session_date: str) -> List[str]:
+        try:
+            date_value = datetime.date.fromisoformat(session_date)
+        except ValueError:
+            return []
+        return [
+            date_value.strftime("%d/%m/%Y"),
+            date_value.strftime("%m/%d/%Y"),
+            date_value.strftime("%b %d, %Y"),
+            date_value.strftime("%d %b %Y"),
+            date_value.strftime("%b %d %Y"),
+        ]
 
-    def _fetch_closed_quote_bar(
+    @classmethod
+    def _parse_historical_session_row(
+        cls,
+        raw_html: str,
+        ticker: str,
+        session_date: str,
+        host: str = "regional.investing.com",
+    ) -> Optional[Dict[str, Any]]:
+        if not raw_html:
+            return None
+
+        cleaned = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", " ", raw_html, flags=re.IGNORECASE | re.DOTALL)
+        plain = html_lib.unescape(re.sub(r"<[^>]+>", " ", cleaned))
+        plain = plain.replace("|", " ").replace("\u00a0", " ")
+        plain = re.sub(r"\s+", " ", plain)
+
+        number = r"([+-]?\d[\d,]*(?:\.\d+)?\s*[KMB]?)"
+        for label in cls._date_labels(session_date):
+            pattern = rf"{re.escape(label)}\s+{number}\s+{number}\s+{number}\s+{number}\s+{number}(?=\s|$)"
+            match = re.search(pattern, plain, re.IGNORECASE)
+            if not match:
+                continue
+
+            close = cls._to_number(match.group(1))
+            open_ = cls._to_number(match.group(2))
+            high = cls._to_number(match.group(3))
+            low = cls._to_number(match.group(4))
+            volume = cls._to_number(match.group(5))
+            if None in (close, open_, high, low, volume):
+                continue
+
+            close_f = float(close)
+            open_f = float(open_)
+            high_f = float(high)
+            low_f = float(low)
+            volume_f = float(volume)
+            if min(open_f, high_f, low_f, close_f) <= 0 or volume_f < 0:
+                continue
+            if high_f < max(open_f, close_f, low_f) or low_f > min(open_f, close_f, high_f):
+                continue
+
+            return {
+                "ticker": ticker.strip().upper(),
+                "session_date": session_date,
+                "open": open_f,
+                "high": high_f,
+                "low": low_f,
+                "close": close_f,
+                "volume": volume_f,
+                "actual_provider": f"Investing Regional Historical ({host})",
+                "fetched_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+        return None
+
+    def _fetch_regional_historical_bar(
         self,
         ticker: str,
         session_date: str,
         english_name: Optional[str],
     ) -> Optional[Dict[str, Any]]:
-        if self._egx_session_may_be_live_now():
-            return None
-
         clean_ticker = ticker.strip().upper()
         meta = self._resolve_metadata(clean_ticker, english_name)
-        if not meta:
+        if not meta or not meta.get("url"):
             return None
 
-        from curl_cffi import requests
-        session = requests.Session(impersonate="chrome124")
-        values: Optional[Dict[str, float]] = None
+        urls = self._regional_historical_urls(str(meta["url"]))
+        if not urls:
+            return None
 
-        # First try Investing's realtime JSON representation.
-        realtime_urls = [
-            f"https://api.investing.com/api/financialdata/{meta['id']}/real-time-data/",
-            f"https://api.investing.com/api/financialdata/{meta['id']}/real-time-data/?interval=P1D",
-        ]
-        for url in realtime_urls:
+        try:
+            from curl_cffi import requests
+            session = requests.Session(impersonate="chrome124")
+        except Exception:
+            return None
+
+        for url in urls:
             try:
-                response = session.get(url, headers=self._headers(), timeout=15)
-                if response.status_code == 200:
-                    values = self._extract_quote_dict(response.json())
-                    if values:
-                        break
+                parsed = urlparse(url)
+                headers = dict(self._headers())
+                headers["Accept"] = "text/html,application/xhtml+xml"
+                headers["Referer"] = f"https://{parsed.netloc}/"
+                headers.pop("Origin", None)
+                response = session.get(url, headers=headers, timeout=20)
+                if response.status_code != 200:
+                    continue
+                bar = self._parse_historical_session_row(
+                    response.text,
+                    ticker=clean_ticker,
+                    session_date=session_date,
+                    host=parsed.netloc,
+                )
+                if bar is not None:
+                    return bar
             except Exception:
                 continue
-
-        # If JSON is unavailable, use the server-rendered quote page only when it
-        # explicitly reports the market as closed. This remains genuine source data.
-        if values is None and meta.get("url"):
-            try:
-                page_headers = dict(self._headers())
-                page_headers["Accept"] = "text/html,application/xhtml+xml"
-                response = session.get(str(meta["url"]), headers=page_headers, timeout=20)
-                if response.status_code == 200:
-                    raw_html = response.text
-                    plain = html_lib.unescape(re.sub(r"<[^>]+>", " ", raw_html))
-                    plain = re.sub(r"\s+", " ", plain)
-                    if re.search(r"\bClosed\b", plain, re.IGNORECASE):
-                        close_match = re.search(
-                            r'data-test=["\']instrument-price-last["\'][^>]*>\s*([^<]+)',
-                            raw_html,
-                            re.IGNORECASE,
-                        )
-                        open_match = re.search(r"\bOpen\s+([\d,.]+)", plain, re.IGNORECASE)
-                        range_match = re.search(
-                            r"Day['’]s Range\s+([\d,.]+)\s*[-–]\s*([\d,.]+)",
-                            plain,
-                            re.IGNORECASE,
-                        )
-                        volume_match = re.search(r"\bVolume\s+([\d,.]+\s*[KMB]?)", plain, re.IGNORECASE)
-                        if close_match and open_match and range_match and volume_match:
-                            values = {
-                                "close": self._to_number(close_match.group(1)),
-                                "open": self._to_number(open_match.group(1)),
-                                "low": self._to_number(range_match.group(1)),
-                                "high": self._to_number(range_match.group(2)),
-                                "volume": self._to_number(volume_match.group(1)),
-                            }
-            except Exception:
-                values = None
-
-        if not values or any(values.get(k) is None for k in ("close", "open", "high", "low", "volume")):
-            return None
-
-        open_ = float(values["open"])
-        high = float(values["high"])
-        low = float(values["low"])
-        close = float(values["close"])
-        volume = float(values["volume"])
-        if min(open_, high, low, close) <= 0 or volume < 0:
-            return None
-        if high < max(open_, close, low) or low > min(open_, close, high):
-            return None
-
-        return {
-            "ticker": clean_ticker,
-            "session_date": session_date,
-            "open": open_,
-            "high": high,
-            "low": low,
-            "close": close,
-            "volume": volume,
-            "actual_provider": "Investing Closed Session",
-            "fetched_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        }
+        return None
 
     def fetch_session_bar_for_security(
         self,
@@ -444,9 +429,9 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
             if bar["session_date"] == session_date:
                 return bar
 
-        # Historical endpoints can publish one session later than the quote page.
-        # Recover only a genuine CLOSED-session OHLCV bar; never manufacture one.
-        return self._fetch_closed_quote_bar(ticker, session_date, english_name)
+        # The regional fallback must contain an explicit row for the requested
+        # completed date. We deliberately do not relabel a live/current quote.
+        return self._fetch_regional_historical_bar(ticker, session_date, english_name)
 
     def fetch_session_bar(self, ticker: str, session_date: str) -> Optional[Dict[str, Any]]:
         return self.fetch_session_bar_for_security(ticker, session_date, english_name=None)
