@@ -140,6 +140,24 @@ export interface MarketDepthSummary {
   note_ar: string;
 }
 
+export interface BreakoutEntry {
+  status: string;
+  decision: string;
+  decision_ar: string;
+  reason_ar: string;
+  actionable: boolean;
+  resistance_level?: number | null;
+  trigger_price?: number | null;
+  entry_zone_min?: number | null;
+  entry_zone_max?: number | null;
+  stop_loss?: number | null;
+  target_1?: number | null;
+  target_2?: number | null;
+  target_3?: number | null;
+  confirmation_ar?: string | null;
+  uses_manual_price_for_levels: boolean;
+}
+
 export interface LiveAnalysisResult {
   ticker: string;
   current_price: number;
@@ -168,6 +186,7 @@ export interface LiveAnalysisResult {
   owner_add_on?: OwnerAddOn | null;
   corporate_events?: CorporateEvent[];
   market_depth?: MarketDepthSummary | null;
+  breakout_entry?: BreakoutEntry | null;
 }
 
 export interface MarketStatus {
