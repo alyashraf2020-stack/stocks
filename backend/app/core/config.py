@@ -10,10 +10,6 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./egx_platform.db"
 
-    # Primary EGX market-data source. Keep secrets local in backend/.env.
-    EGXAPI_KEY: str = ""
-    EGXAPI_ENV: str = "paper"
-
     # Risk Management Rules (Fixed and Strict)
     MAX_RISK_PER_TRADE_PCT: float = 0.015
     MAX_ALLOCATION_PCT: float = 0.20
@@ -36,12 +32,7 @@ class Settings(BaseSettings):
 
     MIN_REQUIRED_BARS: int = 50
 
-    model_config = ConfigDict(
-        case_sensitive=True,
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+    model_config = ConfigDict(case_sensitive=True)
 
 
 settings = Settings()
