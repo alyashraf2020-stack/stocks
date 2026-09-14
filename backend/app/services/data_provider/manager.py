@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.services.data_provider.base import BaseHistoricalProvider
 from app.services.data_provider.yahoo_provider import YahooEGXProvider
 from app.services.data_provider.investing_provider import InvestingHistoricalProvider
+from app.services.data_provider.investing_legacy_provider import InvestingLegacySearchProvider
 from app.services.data_provider.egx_direct_provider import EGIDProvider, EGXDirectProvider
 from app.services.data_provider.stooq_provider import StooqEGXProvider
 from app.services.validator import CandleValidator
@@ -27,6 +28,7 @@ class ProviderManager:
         self.primary_provider: BaseHistoricalProvider = primary_provider or YahooEGXProvider()
         self.fallback_providers: List[BaseHistoricalProvider] = fallback_providers or [
             InvestingHistoricalProvider(),
+            InvestingLegacySearchProvider(),
             EGIDProvider(),
             StooqEGXProvider()
         ]
@@ -47,8 +49,6 @@ class ProviderManager:
         limit: int,
         english_name: Optional[str],
     ) -> List[Dict[str, Any]]:
-        # Investing gets Security Master name context so every EGX security can
-        # resolve automatically, not just hard-coded symbols such as KORA/EGAL.
         if isinstance(provider, InvestingHistoricalProvider):
             return provider.fetch_historical_bars_for_security(
                 ticker=ticker,
@@ -81,7 +81,6 @@ class ProviderManager:
         expected_session_str = expected_session.isoformat()
         english_name = self._security_english_name(db, clean_ticker)
 
-        # 1. Check cached database candles if db provided and not forcing refresh
         if db is not None and not force_refresh:
             cached_rows = (
                 db.query(EGXCandle)
@@ -94,7 +93,6 @@ class ProviderManager:
                 last_cached_date = datetime.date.fromisoformat(last_cached.session_date)
                 sessions_behind = calculate_sessions_behind(last_cached_date, now_cairo)
 
-                # Strict Zero-Lag Policy: cached data is accepted ONLY if current.
                 if sessions_behind == 0:
                     raw_bars = [c.to_dict() for c in cached_rows[-limit:]]
                     validated_bars = CandleValidator.validate_bars(raw_bars)
@@ -116,7 +114,6 @@ class ProviderManager:
                         "bars": validated_bars
                     }
 
-        # 2. Query all real providers and select the freshest valid result.
         all_providers = [self.primary_provider] + self.fallback_providers
         best_bars: List[Dict[str, Any]] = []
         best_provider: Optional[str] = None
@@ -155,8 +152,6 @@ class ProviderManager:
             except Exception:
                 continue
 
-        # 3. If the best history is stale, let every real fallback try the exact
-        # missing completed EGX session. Investing gets company-name context.
         if best_bars and best_sessions_behind is not None and best_sessions_behind > 0:
             for fallback in self.fallback_providers:
                 try:
@@ -169,7 +164,6 @@ class ProviderManager:
                     if missing_bar is not None:
                         validated_missing = CandleValidator.validate_bar(missing_bar)
                         if validated_missing.get("hlcv_status") == "VALID":
-                            # Avoid duplicate session if a provider returned it already.
                             if not any(
                                 b.get("session_date") == validated_missing.get("session_date")
                                 for b in best_bars
@@ -216,7 +210,6 @@ class ProviderManager:
         freshness_label = get_freshness_label(sessions_behind)
         freshness_ar = get_freshness_display_ar(sessions_behind)
 
-        # Cache authentic validated bars only.
         if db is not None:
             try:
                 for b in validated_bars:
