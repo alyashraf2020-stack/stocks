@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Database } from "lucide-react";
 import { getStockDetail, submitManualEod } from "@/lib/api";
@@ -41,6 +41,15 @@ export default function ManualEodRecovery() {
       .catch(() => setStock(null));
   }, [ticker]);
 
+  const openReferenceWarning = useMemo(() => {
+    const o = Number(open);
+    const h = Number(high);
+    const l = Number(low);
+    if (!open || !high || !low) return false;
+    if (![o, h, l].every((x) => Number.isFinite(x) && x > 0)) return false;
+    return o < l || o > h;
+  }, [open, high, low]);
+
   if (!ticker || !stock || stock.sessions_behind == null || stock.sessions_behind <= 0) {
     return null;
   }
@@ -67,8 +76,13 @@ export default function ManualEodRecovery() {
       setError("أدخل قيم Open / High / Low / Close موجبة وحجم تداول صحيح.");
       return;
     }
-    if (l > o || l > c || h < o || h < c || h < l) {
-      setError("القيم غير منطقية: يجب أن يكون Low أقل من Open وClose، وHigh أعلى منهما.");
+
+    // High/Low/Close must form a valid completed session. Some broker apps can
+    // expose an Open/reference value slightly outside High/Low; that value is
+    // preserved as reported but marked unverified by the backend instead of
+    // fabricating a replacement Open.
+    if (h < l || c < l || c > h) {
+      setError("القيم غير منطقية: يجب أن يكون High >= Low وأن يقع Close بينهما.");
       return;
     }
 
@@ -100,7 +114,7 @@ export default function ManualEodRecovery() {
           <div className="space-y-1">
             <h2 className="text-sm sm:text-base font-black text-amber-300">المصدر العام متأخر — أدخل شمعة الجلسة المكتملة مرة واحدة</h2>
             <p className="text-xs text-gray-300 leading-relaxed">
-              آخر جلسة متاحة تلقائيًا هي <strong className="font-mono num-ltr">{stock.latest_session_date || "—"}</strong>، بينما الجلسة المطلوبة هي <strong className="font-mono num-ltr text-white">{expectedSession || "—"}</strong>. أدخل بيانات OHLCV من تطبيق الوسيط، وبعد الحفظ سيعود التحليل للعمل بدون استخدام السعر اللحظي كإغلاق.
+              آخر جلسة متاحة تلقائيًا هي <strong className="font-mono num-ltr">{stock.latest_session_date || "—"}</strong>، بينما الجلسة المطلوبة هي <strong className="font-mono num-ltr text-white">{expectedSession || "—"}</strong>. أدخل بيانات الجلسة من تطبيق الوسيط. لو قيمة Open التي يعرضها الوسيط خرجت قليلًا عن High/Low، سيحتفظ بها النظام كمرجع غير موثوق ولن يعتمد عليها في التحليل الفني.
             </p>
           </div>
         </div>
@@ -108,7 +122,7 @@ export default function ManualEodRecovery() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <label className="space-y-1">
-              <span className="text-[11px] text-gray-400">Open</span>
+              <span className="text-[11px] text-gray-400">Open من الوسيط</span>
               <input type="number" step="0.01" min="0.01" value={open} onChange={(e) => setOpen(e.target.value)} required className="w-full bg-surface border border-surfaceBorder rounded-lg px-3 py-2 text-sm text-white font-mono" />
             </label>
             <label className="space-y-1">
@@ -128,6 +142,12 @@ export default function ManualEodRecovery() {
               <input type="number" step="1" min="0" value={volume} onChange={(e) => setVolume(e.target.value)} required className="w-full bg-surface border border-surfaceBorder rounded-lg px-3 py-2 text-sm text-white font-mono" />
             </label>
           </div>
+
+          {openReferenceWarning && (
+            <div className="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-lg p-3 leading-relaxed">
+              قيمة Open التي أدخلتها خارج نطاق High/Low. سنحفظها كما ظهرت في تطبيق الوسيط كقيمة مرجعية غير موثوقة، بينما يعتمد التحليل على High / Low / Close / Volume الموثقة بدون اختلاق Open بديل.
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="text-[11px] text-gray-500 flex items-center gap-1.5">
