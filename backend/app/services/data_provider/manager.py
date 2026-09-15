@@ -201,6 +201,16 @@ class ProviderManager:
         expected_session_str = expected_session.isoformat()
         english_name = self._security_english_name(db, clean_ticker)
 
+        # Keep a validated local-cache baseline even when it is stale. Previously,
+        # if every public full-history request failed temporarily, we threw away a
+        # perfectly good cached history and returned DATA_UNAVAILABLE / 0 bars.
+        # The cache is safe to use as the historical baseline; the strict
+        # zero-session-lag gate still prevents actionable analysis until missing
+        # completed sessions are recovered.
+        cached_baseline_bars: List[Dict[str, Any]] = []
+        cached_baseline_provider: Optional[str] = None
+        cached_baseline_sessions_behind: Optional[int] = None
+
         if db is not None and not force_refresh:
             cached_rows = (
                 db.query(EGXCandle)
@@ -209,7 +219,7 @@ class ProviderManager:
                 .all()
             )
 
-            # Repair previously cached single-source outliers automatically. A
+            # Repair a previously cached single-source outlier at the tail. A
             # user-verified EOD candle is intentionally not deleted here.
             if len(cached_rows) >= 2:
                 last_cached = cached_rows[-1]
@@ -222,40 +232,54 @@ class ProviderManager:
                     try:
                         db.delete(last_cached)
                         db.commit()
+                        cached_rows = cached_rows[:-1]
                     except Exception:
                         db.rollback()
-                    cached_rows = cached_rows[:-1]
 
-            if cached_rows and len(cached_rows) >= 20:
-                last_cached = cached_rows[-1]
-                last_cached_date = datetime.date.fromisoformat(last_cached.session_date)
-                sessions_behind = calculate_sessions_behind(last_cached_date, now_cairo)
+            if cached_rows:
+                cached_raw = [c.to_dict() for c in cached_rows[-limit:]]
+                cached_validated = CandleValidator.validate_bars(cached_raw)
+                cached_validated = [
+                    b for b in cached_validated if b.get("hlcv_status") == "VALID"
+                ]
+                if cached_validated:
+                    cached_baseline_bars = cached_validated
+                    cached_baseline_provider = cached_rows[-1].actual_provider
+                    cached_latest_date = datetime.date.fromisoformat(
+                        cached_validated[-1]["session_date"]
+                    )
+                    cached_baseline_sessions_behind = calculate_sessions_behind(
+                        cached_latest_date,
+                        now_cairo,
+                    )
 
-                if sessions_behind == 0:
-                    raw_bars = [c.to_dict() for c in cached_rows[-limit:]]
-                    validated_bars = CandleValidator.validate_bars(raw_bars)
-                    has_min_history = len(validated_bars) >= 50
-                    is_eligible = has_min_history
-                    status = "SUCCESS" if is_eligible else "INSUFFICIENT_DATA"
-                    return {
-                        "status": status,
-                        "ticker": clean_ticker,
-                        "actual_provider": last_cached.actual_provider,
-                        "raw_bars_count": len(validated_bars),
-                        "analytical_bars_count": len(validated_bars),
-                        "expected_latest_session": expected_session_str,
-                        "latest_available_session": last_cached.session_date,
-                        "sessions_behind": 0,
-                        "freshness": "CURRENT",
-                        "freshness_ar": "محدث",
-                        "current_analysis_eligible": is_eligible,
-                        "bars": validated_bars,
-                    }
+                    if cached_baseline_sessions_behind == 0:
+                        has_min_history = len(cached_validated) >= 50
+                        is_eligible = has_min_history
+                        status = "SUCCESS" if is_eligible else "INSUFFICIENT_DATA"
+                        return {
+                            "status": status,
+                            "ticker": clean_ticker,
+                            "actual_provider": cached_baseline_provider,
+                            "raw_bars_count": len(cached_validated),
+                            "analytical_bars_count": len(cached_validated),
+                            "expected_latest_session": expected_session_str,
+                            "latest_available_session": cached_validated[-1]["session_date"],
+                            "sessions_behind": 0,
+                            "freshness": "CURRENT",
+                            "freshness_ar": "محدث",
+                            "current_analysis_eligible": is_eligible,
+                            "bars": cached_validated,
+                        }
+
+        # Start from the local validated history when available, then let fresher
+        # public providers replace it. This guarantees we never collapse from
+        # hundreds of known bars to zero merely because an upstream site times out.
+        best_bars: List[Dict[str, Any]] = list(cached_baseline_bars)
+        best_provider: Optional[str] = cached_baseline_provider
+        best_sessions_behind: Optional[int] = cached_baseline_sessions_behind
 
         all_providers = [self.primary_provider] + self.fallback_providers
-        best_bars: List[Dict[str, Any]] = []
-        best_provider: Optional[str] = None
-        best_sessions_behind: Optional[int] = None
         current_outlier_candidates: List[Tuple[str, List[Dict[str, Any]]]] = []
 
         for provider in all_providers:
@@ -270,6 +294,9 @@ class ProviderManager:
                     continue
 
                 val_p_bars = CandleValidator.validate_bars(raw_p_bars)
+                val_p_bars = [
+                    b for b in val_p_bars if b.get("hlcv_status") == "VALID"
+                ]
                 if not val_p_bars:
                     continue
 
@@ -316,9 +343,10 @@ class ProviderManager:
             except Exception:
                 continue
 
-        # IMPORTANT: backfill every missing trading session in order. Previously
-        # we tried only expected_session_str. That could leave Sep 14 missing when
-        # a series ended on Sep 13 and Sep 15 was the expected session.
+        # Backfill every missing completed trading session in order. If a series
+        # ends on Sep 13 while Sep 15 is expected, recover Sep 14 first, then Sep
+        # 15. If Sep 15 is unavailable we still keep Sep 14 and report one session
+        # behind instead of throwing away all historical bars.
         if best_bars and best_sessions_behind is not None and best_sessions_behind > 0:
             latest_best_date = datetime.date.fromisoformat(best_bars[-1]["session_date"])
             missing_sessions = self._missing_completed_sessions(
@@ -336,9 +364,6 @@ class ProviderManager:
                     english_name=english_name,
                 )
                 if recovered_bar is None:
-                    # Keep the series contiguous. Do not skip a missing session and
-                    # append a later one, because indicators would then be based on
-                    # an incomplete EOD sequence.
                     break
 
                 if not any(
@@ -355,9 +380,8 @@ class ProviderManager:
                 best_sessions_behind = calculate_sessions_behind(final_latest_date, now_cairo)
                 if recovered_providers:
                     unique_recovered = list(dict.fromkeys(recovered_providers))
-                    best_provider = (
-                        f"{best_provider} + " + " + ".join(unique_recovered)
-                    )
+                    base_provider = best_provider or "Cached EOD history"
+                    best_provider = base_provider + " + " + " + ".join(unique_recovered)
 
         if not best_bars:
             return {
