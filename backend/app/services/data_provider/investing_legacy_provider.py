@@ -4,6 +4,12 @@ from urllib.parse import quote_plus
 from app.services.data_provider.investing_provider import InvestingHistoricalProvider
 
 
+KNOWN_QUOTE_URLS = {
+    "KORA": "https://www.investing.com/equities/korra-energi",
+    "EGAL": "https://www.investing.com/equities/egypt-aluminum",
+}
+
+
 class InvestingLegacySearchProvider(InvestingHistoricalProvider):
     """Second public Investing resolver for EGX symbols.
 
@@ -28,6 +34,14 @@ class InvestingLegacySearchProvider(InvestingHistoricalProvider):
         if cached_id is not None and cached_url:
             return cached_id
 
+        # For known EGX symbols we already know the canonical Investing quote
+        # page. Seed it before calling the inherited regional historical-page
+        # fallback so a known instrument id is not stuck with url=None.
+        known_url = KNOWN_QUOTE_URLS.get(clean_ticker)
+        if cached_id is not None and known_url:
+            self._resolved_url_cache[clean_ticker] = known_url
+            return cached_id
+
         # If v2 has not resolved anything yet, give it the first chance. If it
         # resolves only an id without a page URL, continue into the legacy search
         # so the regional historical-page fallback can still be used.
@@ -36,6 +50,10 @@ class InvestingLegacySearchProvider(InvestingHistoricalProvider):
             if resolved and self._resolved_url_cache.get(clean_ticker):
                 return resolved
             cached_id = resolved
+
+            if cached_id is not None and known_url:
+                self._resolved_url_cache[clean_ticker] = known_url
+                return cached_id
 
         queries = [clean_ticker]
         if english_name:
@@ -116,6 +134,8 @@ class InvestingLegacySearchProvider(InvestingHistoricalProvider):
                         self._resolved_cache[clean_ticker] = best_id
                         if best_url:
                             self._resolved_url_cache[clean_ticker] = best_url
+                        elif known_url:
+                            self._resolved_url_cache[clean_ticker] = known_url
                         return best_id
 
         except Exception:
