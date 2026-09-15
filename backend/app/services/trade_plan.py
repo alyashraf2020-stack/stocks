@@ -2,6 +2,7 @@ import math
 from typing import List, Dict, Any, Optional
 from app.core.config import settings
 
+
 class TradePlanEngine:
     """
     Centralized deterministic TradePlanEngine for long-only EGX trading setups.
@@ -38,8 +39,8 @@ class TradePlanEngine:
 
         last_bar = analytical_bars[-1]
         current_close = float(last_bar["close"])
-        
-        # Lookback window for technical support & resistance (past 20 valid sessions)
+
+        # Lookback window for the primary setup (past 20 valid sessions)
         lookback_bars = analytical_bars[-20:]
         recent_lows = [float(b["low"]) for b in lookback_bars]
         recent_highs = [float(b["high"]) for b in lookback_bars]
@@ -47,9 +48,7 @@ class TradePlanEngine:
         support_level = round(min(recent_lows), 2)
         resistance_level = round(max(recent_highs), 2)
 
-        atr = last_bar.get("atr_14")
-        if atr is None or atr <= 0:
-            atr = current_close * 0.025  # Conservative 2.5% proxy if ATR not computed
+        atr = cls._safe_atr(last_bar, current_close)
 
         # 3. Deterministic Stop Loss calculation
         candidate_stop = support_level - (0.5 * atr)
@@ -128,34 +127,33 @@ class TradePlanEngine:
         }
 
         previous_plan = None
+
+        # 8. Completed-plan rollover:
+        # If the latest completed EOD close has already exceeded T3, the old setup is
+        # archived and a fresh re-entry setup is built from the latest local structure.
+        # Manual live price is NOT used here; only validated EOD analytical bars.
         if current_close >= target_3:
             previous_plan = dict(trade_plan)
             previous_plan["plan_status"] = "TARGETS_COMPLETED"
             previous_plan["new_entry_allowed"] = False
 
-            # Check if a new valid setup exists at current levels or if overbought
-            rsi = last_bar.get("rsi_14")
-            if rsi is not None and rsi > 75.0:
-                trade_plan = {
-                    "entry_zone_min": None,
-                    "entry_zone_max": None,
-                    "planning_entry": None,
-                    "stop_loss": None,
-                    "r_unit": None,
-                    "target_1": None,
-                    "target_2": None,
-                    "target_3": None,
-                    "support_level": support_level,
-                    "resistance_level": resistance_level,
-                    "entry_basis": "لا توجد فرصة دخول صالحة حاليًا بعد اكتمال أهداف الخطة السابقة",
-                    "stop_basis": "انتظر تكوين قاع فني جديد",
-                    "factor_score": score,
-                    "analysis_strength": strength,
-                    "factor_breakdown": factor_breakdown,
-                    "plan_status": "NO_VALID_SETUP",
-                    "new_entry_allowed": False,
-                    "trigger_condition": "انتظر تكوين إعداد فني جديد من البيانات القادمة"
-                }
+            reentry_plan = cls._calculate_reentry_plan(
+                analytical_bars=analytical_bars,
+                factor_breakdown=factor_breakdown,
+                score=score,
+                strength=strength,
+            )
+
+            if reentry_plan is not None:
+                trade_plan = reentry_plan
+            else:
+                trade_plan = cls._no_valid_setup_plan(
+                    support_level=support_level,
+                    resistance_level=resistance_level,
+                    factor_breakdown=factor_breakdown,
+                    score=score,
+                    strength=strength,
+                )
 
         return {
             "status": "VALID",
@@ -164,6 +162,151 @@ class TradePlanEngine:
             "reason_ar": "تم حساب النموذج الفني بنجاح بناءً على بيانات تاريخية موثقة حتى آخر جلسة مكتملة",
             "trade_plan": trade_plan,
             "previous_plan": previous_plan
+        }
+
+    @classmethod
+    def _calculate_reentry_plan(
+        cls,
+        analytical_bars: List[Dict[str, Any]],
+        factor_breakdown: Dict[str, int],
+        score: int,
+        strength: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build a fresh pullback/retest setup after an older setup completed all targets.
+
+        Important: this method uses EOD analytical bars only. It never consumes the
+        manual live price, so no live price is fabricated into OHLCV or indicators.
+        """
+        if len(analytical_bars) < 20:
+            return None
+
+        last_bar = analytical_bars[-1]
+        current_close = float(last_bar["close"])
+        if current_close <= 0:
+            return None
+
+        atr = cls._safe_atr(last_bar, current_close)
+        if atr <= 0:
+            return None
+
+        rsi = last_bar.get("rsi_14")
+        # Avoid manufacturing a chase entry while the completed move is still extended.
+        if rsi is not None and float(rsi) > 75.0:
+            return None
+
+        recent_10 = analytical_bars[-10:]
+        recent_5 = analytical_bars[-5:]
+
+        local_swing_low = min(float(b["low"]) for b in recent_5)
+        local_resistance = max(float(b["high"]) for b in recent_10)
+
+        # Prefer the nearest validated support reference below the latest close.
+        support_candidates = [local_swing_low]
+        for key in ("sma_20", "bb_middle"):
+            value = last_bar.get(key)
+            if value is not None:
+                value = float(value)
+                if 0 < value <= current_close:
+                    support_candidates.append(value)
+
+        local_support = max(support_candidates)
+
+        # Keep the new setup tied to the latest local structure instead of an old deep low.
+        # 1.5 ATR is a deterministic pullback envelope based on EOD volatility.
+        local_support = max(local_support, current_close - (1.5 * atr))
+        local_support = min(local_support, current_close)
+
+        stop_loss = round(max(local_support - (0.75 * atr), 0.01), 2)
+        entry_zone_min = round(max(local_support, stop_loss + (0.5 * atr)), 2)
+        entry_zone_max = round(min(current_close, entry_zone_min + (0.6 * atr)), 2)
+
+        if entry_zone_max < entry_zone_min:
+            return None
+
+        planning_entry = entry_zone_max
+        r_unit = round(planning_entry - stop_loss, 2)
+        if r_unit <= 0:
+            return None
+
+        target_1 = round(planning_entry + (settings.TARGET_1_R_MULTIPLE * r_unit), 2)
+        target_2 = round(planning_entry + (settings.TARGET_2_R_MULTIPLE * r_unit), 2)
+        target_3 = round(planning_entry + (settings.TARGET_3_R_MULTIPLE * r_unit), 2)
+
+        if not (stop_loss < entry_zone_min <= entry_zone_max < target_1 < target_2 < target_3):
+            return None
+
+        if entry_zone_min <= current_close <= entry_zone_max:
+            plan_status = "ACTIVE"
+            new_entry_allowed = True
+        else:
+            plan_status = "NOT_TRIGGERED"
+            new_entry_allowed = False
+
+        return {
+            "entry_zone_min": entry_zone_min,
+            "entry_zone_max": entry_zone_max,
+            "planning_entry": planning_entry,
+            "stop_loss": stop_loss,
+            "r_unit": r_unit,
+            "target_1": target_1,
+            "target_2": target_2,
+            "target_3": target_3,
+            "support_level": round(local_support, 2),
+            "resistance_level": round(local_resistance, 2),
+            "entry_basis": (
+                f"منطقة إعادة دخول جديدة مبنية على أحدث هيكل سعري بعد اكتمال الخطة السابقة "
+                f"({entry_zone_min:.2f} – {entry_zone_max:.2f} ج.م)"
+            ),
+            "stop_basis": (
+                f"وقف الخسارة أسفل دعم إعادة الاختبار ({local_support:.2f} ج.م) "
+                f"بهامش 0.75 ATR"
+            ),
+            "factor_score": score,
+            "analysis_strength": strength,
+            "factor_breakdown": factor_breakdown,
+            "plan_status": plan_status,
+            "new_entry_allowed": new_entry_allowed,
+            "trigger_condition": (
+                f"انتظر عودة السعر إلى منطقة {entry_zone_min:.2f} – {entry_zone_max:.2f} ج.م "
+                "مع ثبات السعر وعدم كسر وقف الخسارة؛ لا تطارد السعر أعلى المنطقة"
+            )
+        }
+
+    @staticmethod
+    def _safe_atr(last_bar: Dict[str, Any], current_close: float) -> float:
+        atr = last_bar.get("atr_14")
+        if atr is None or float(atr) <= 0:
+            return current_close * 0.025
+        return float(atr)
+
+    @staticmethod
+    def _no_valid_setup_plan(
+        support_level: float,
+        resistance_level: float,
+        factor_breakdown: Dict[str, int],
+        score: int,
+        strength: str,
+    ) -> Dict[str, Any]:
+        return {
+            "entry_zone_min": None,
+            "entry_zone_max": None,
+            "planning_entry": None,
+            "stop_loss": None,
+            "r_unit": None,
+            "target_1": None,
+            "target_2": None,
+            "target_3": None,
+            "support_level": support_level,
+            "resistance_level": resistance_level,
+            "entry_basis": "لا توجد فرصة دخول صالحة حاليًا بعد اكتمال أهداف الخطة السابقة",
+            "stop_basis": "انتظر تكوين قاع فني جديد من بيانات EOD الموثقة",
+            "factor_score": score,
+            "analysis_strength": strength,
+            "factor_breakdown": factor_breakdown,
+            "plan_status": "NO_VALID_SETUP",
+            "new_entry_allowed": False,
+            "trigger_condition": "انتظر تكوين إعداد فني جديد من البيانات القادمة"
         }
 
     @classmethod
@@ -210,7 +353,7 @@ class TradePlanEngine:
             liq_pts += 15
         elif vol_recent > 0:
             liq_pts += 8
-        
+
         if atr is not None and close > 0:
             rel_atr = (atr / close) * 100.0
             if 1.0 <= rel_atr <= 6.0:
