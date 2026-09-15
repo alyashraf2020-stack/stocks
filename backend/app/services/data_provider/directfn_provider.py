@@ -5,6 +5,10 @@ from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional
 
 from app.services.data_provider.base import BaseHistoricalProvider
+from app.services.data_provider.investing_provider import (
+    INVESTING_INSTRUMENT_MAP,
+    InvestingHistoricalProvider,
+)
 
 
 class _TableRowParser(HTMLParser):
@@ -40,20 +44,28 @@ class _TableRowParser(HTMLParser):
 
 
 class DirectFNCompletedSessionProvider(BaseHistoricalProvider):
-    """Latest completed EGX-session fallback from DirectFN's public table.
+    """Latest completed EGX-session fallback from public sources.
 
-    This provider is deliberately session-scoped. It never invents historical
-    dates and only returns a bar when DirectFN's page explicitly shows the same
-    market date requested by the caller.
+    DirectFN is tried first because it exposes an explicit market date. If the
+    requested ticker/date is absent there, selected securities with a known
+    Investing page are recovered from an exact dated regional Investing
+    historical row. No live quote is ever relabelled as an EOD candle.
 
     Some DirectFN rows expose Open as 0.00. In that case we do *not* fabricate
     an open. We only fill the Open from Mubasher when Mubasher's High/Low match
-    the DirectFN row for the same market session; otherwise the provider returns
-    None and the manager continues to the next source/manual recovery path.
+    the DirectFN row for the same market session; otherwise the provider tries
+    the exact-date Investing regional fallback.
     """
 
     TRADING_URL = "https://directfn.com.eg/tradingData.aspx"
     MUBASHER_URL = "https://english.mubasher.info/markets/EGX/stocks/{ticker}"
+
+    # These URLs are page identities only; all OHLCV still has to be read from
+    # an explicit row whose date exactly equals the requested completed session.
+    KNOWN_INVESTING_URLS: Dict[str, str] = {
+        "KORA": "https://ca.investing.com/equities/korra-energi",
+        "EGAL": "https://ca.investing.com/equities/egypt-aluminum",
+    }
 
     @property
     def provider_name(self) -> str:
@@ -198,6 +210,32 @@ class DirectFNCompletedSessionProvider(BaseHistoricalProvider):
         tolerance = max(0.02, max(abs(a), abs(b)) * 0.0025)
         return abs(a - b) <= tolerance
 
+    def _fetch_known_investing_session(
+        self,
+        ticker: str,
+        session_date: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Recover an exact completed session from a known Investing page.
+
+        This fixes the important case where we know an Investing instrument id
+        (for example KORA) but the generic resolver has no page URL, which used
+        to prevent the regional historical fallback from running at all.
+        """
+        clean_ticker = ticker.strip().upper()
+        known_url = self.KNOWN_INVESTING_URLS.get(clean_ticker)
+        instrument_id = INVESTING_INSTRUMENT_MAP.get(clean_ticker)
+        if not known_url or not instrument_id:
+            return None
+
+        provider = InvestingHistoricalProvider()
+        provider._resolved_cache[clean_ticker] = int(instrument_id)
+        provider._resolved_url_cache[clean_ticker] = known_url
+        return provider._fetch_regional_historical_bar(
+            ticker=clean_ticker,
+            session_date=session_date,
+            english_name=None,
+        )
+
     def fetch_historical_bars(self, ticker: str, limit: int = 250) -> List[Dict[str, Any]]:
         # This source is intentionally only used to recover the latest completed
         # session; longer history continues to come from Yahoo/Investing/Stooq.
@@ -211,15 +249,15 @@ class DirectFNCompletedSessionProvider(BaseHistoricalProvider):
 
         direct_html = self._get_html(self.TRADING_URL)
         if not direct_html:
-            return None
+            return self._fetch_known_investing_session(ticker, session_date)
 
         market_date = self._extract_market_date(direct_html)
         if market_date != requested_date:
-            return None
+            return self._fetch_known_investing_session(ticker, session_date)
 
         row = self._extract_directfn_row(direct_html, ticker)
         if not row:
-            return None
+            return self._fetch_known_investing_session(ticker, session_date)
 
         close = row["close"]
         high = row["high"]
@@ -228,31 +266,31 @@ class DirectFNCompletedSessionProvider(BaseHistoricalProvider):
         open_ = row["open"]
 
         if close <= 0 or high <= 0 or low <= 0 or volume < 0:
-            return None
+            return self._fetch_known_investing_session(ticker, session_date)
         if high < max(close, low) or low > min(close, high):
-            return None
+            return self._fetch_known_investing_session(ticker, session_date)
 
         provider = "DirectFN EGX"
         if open_ <= 0:
             mubasher_html = self._get_html(self.MUBASHER_URL.format(ticker=ticker.strip().upper()))
             if not mubasher_html:
-                return None
+                return self._fetch_known_investing_session(ticker, session_date)
             mubasher = self._extract_mubasher_open_high_low(mubasher_html)
             if not mubasher:
-                return None
+                return self._fetch_known_investing_session(ticker, session_date)
 
             # Date on the Mubasher quote page is not explicit enough for strict
             # session attribution, so it is only allowed to fill Open when its
             # High/Low corroborate DirectFN's exact dated row.
             if not self._prices_match(mubasher["high"], high):
-                return None
+                return self._fetch_known_investing_session(ticker, session_date)
             if not self._prices_match(mubasher["low"], low):
-                return None
+                return self._fetch_known_investing_session(ticker, session_date)
             open_ = mubasher["open"]
             provider = "DirectFN EGX + Mubasher verified open"
 
         if open_ <= 0 or not (low <= open_ <= high):
-            return None
+            return self._fetch_known_investing_session(ticker, session_date)
 
         return {
             "ticker": ticker.strip().upper(),
