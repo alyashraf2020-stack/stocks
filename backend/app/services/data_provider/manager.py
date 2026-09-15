@@ -13,7 +13,8 @@ from app.services.egx_calendar import (
     calculate_sessions_behind,
     get_freshness_label,
     get_freshness_display_ar,
-    CAIRO_TZ
+    is_egx_trading_day,
+    CAIRO_TZ,
 )
 from app.models.candle import EGXCandle
 from app.models.security import EGXSecurity
@@ -30,14 +31,12 @@ class ProviderManager:
     def __init__(
         self,
         primary_provider: Optional[BaseHistoricalProvider] = None,
-        fallback_providers: Optional[List[BaseHistoricalProvider]] = None
+        fallback_providers: Optional[List[BaseHistoricalProvider]] = None,
     ):
         # No API key or secret is required. The platform uses public market-data
         # sources only and keeps the strict zero-session-lag rule.
         self.primary_provider: BaseHistoricalProvider = primary_provider or YahooEGXProvider()
         self.fallback_providers: List[BaseHistoricalProvider] = fallback_providers or [
-            # DirectFN exposes the latest completed EGX trading table with an
-            # explicit market date, so try it first for a missing latest session.
             DirectFNCompletedSessionProvider(),
             InvestingHistoricalProvider(),
             InvestingLegacySearchProvider(),
@@ -74,6 +73,26 @@ class ProviderManager:
             if abs(a - b) / baseline > cls.CORROBORATION_PRICE_TOLERANCE:
                 return False
         return True
+
+    @staticmethod
+    def _missing_completed_sessions(
+        latest_session: datetime.date,
+        expected_session: datetime.date,
+    ) -> List[datetime.date]:
+        """Return every EGX trading session missing between latest and expected.
+
+        This matters when a provider is more than one session late. For example,
+        if KORA stops at Sep 13 while Sep 15 is expected, the manager must first
+        recover Sep 14, then try Sep 15. It must not jump directly from Sep 13 to
+        Sep 15 and leave a hole in the analytical series.
+        """
+        sessions: List[datetime.date] = []
+        cursor = latest_session + datetime.timedelta(days=1)
+        while cursor <= expected_session:
+            if is_egx_trading_day(cursor):
+                sessions.append(cursor)
+            cursor += datetime.timedelta(days=1)
+        return sessions
 
     def _security_english_name(self, db: Optional[Session], ticker: str) -> Optional[str]:
         if db is None:
@@ -114,8 +133,67 @@ class ProviderManager:
             )
         return provider.fetch_session_bar(ticker, session_date)
 
+    def _recover_one_missing_session(
+        self,
+        best_bars: List[Dict[str, Any]],
+        ticker: str,
+        session_date: str,
+        english_name: Optional[str],
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Recover exactly one missing completed session from fallback sources.
+
+        A large one-session price jump still requires corroboration from a second
+        independent provider. Normal-sized bars can be accepted from one source.
+        """
+        pending_outlier: Optional[Tuple[Dict[str, Any], str]] = None
+
+        for fallback in self.fallback_providers:
+            try:
+                missing_bar = self._fetch_provider_session_bar(
+                    provider=fallback,
+                    ticker=ticker,
+                    session_date=session_date,
+                    english_name=english_name,
+                )
+                if missing_bar is None:
+                    continue
+
+                validated_missing = CandleValidator.validate_bar(missing_bar)
+                if validated_missing.get("hlcv_status") != "VALID":
+                    continue
+                if validated_missing.get("session_date") != session_date:
+                    continue
+
+                previous_close = best_bars[-1].get("close") if best_bars else None
+                if self._is_large_close_jump(previous_close, validated_missing):
+                    if pending_outlier is None:
+                        pending_outlier = (validated_missing, fallback.provider_name)
+                        continue
+
+                    first_bar, first_provider = pending_outlier
+                    if not self._bars_corroborate(first_bar, validated_missing):
+                        continue
+
+                    return (
+                        validated_missing,
+                        f"{first_provider} + {fallback.provider_name} confirmed discontinuity",
+                    )
+
+                return (
+                    validated_missing,
+                    missing_bar.get("actual_provider", fallback.provider_name),
+                )
+            except Exception:
+                continue
+
+        return None, None
+
     def get_raw_historical_bars(
-        self, ticker: str, limit: int = 250, db: Optional[Session] = None, force_refresh: bool = False
+        self,
+        ticker: str,
+        limit: int = 250,
+        db: Optional[Session] = None,
+        force_refresh: bool = False,
     ) -> Dict[str, Any]:
         clean_ticker = ticker.strip().upper()
         now_cairo = datetime.datetime.now(CAIRO_TZ)
@@ -171,7 +249,7 @@ class ProviderManager:
                         "freshness": "CURRENT",
                         "freshness_ar": "محدث",
                         "current_analysis_eligible": is_eligible,
-                        "bars": validated_bars
+                        "bars": validated_bars,
                     }
 
         all_providers = [self.primary_provider] + self.fallback_providers
@@ -216,7 +294,9 @@ class ProviderManager:
                                 break
                         if corroborated_by is not None:
                             best_bars = val_p_bars
-                            best_provider = f"{provider.provider_name} + {corroborated_by} confirmed"
+                            best_provider = (
+                                f"{provider.provider_name} + {corroborated_by} confirmed"
+                            )
                             best_sessions_behind = 0
                             break
                         current_outlier_candidates.append((provider.provider_name, val_p_bars))
@@ -236,55 +316,48 @@ class ProviderManager:
             except Exception:
                 continue
 
+        # IMPORTANT: backfill every missing trading session in order. Previously
+        # we tried only expected_session_str. That could leave Sep 14 missing when
+        # a series ended on Sep 13 and Sep 15 was the expected session.
         if best_bars and best_sessions_behind is not None and best_sessions_behind > 0:
-            pending_outlier: Optional[Tuple[Dict[str, Any], str]] = None
+            latest_best_date = datetime.date.fromisoformat(best_bars[-1]["session_date"])
+            missing_sessions = self._missing_completed_sessions(
+                latest_best_date,
+                expected_session,
+            )
 
-            for fallback in self.fallback_providers:
-                try:
-                    missing_bar = self._fetch_provider_session_bar(
-                        provider=fallback,
-                        ticker=clean_ticker,
-                        session_date=expected_session_str,
-                        english_name=english_name,
-                    )
-                    if missing_bar is None:
-                        continue
-
-                    validated_missing = CandleValidator.validate_bar(missing_bar)
-                    if validated_missing.get("hlcv_status") != "VALID":
-                        continue
-
-                    previous_close = best_bars[-1].get("close")
-                    if self._is_large_close_jump(previous_close, validated_missing):
-                        if pending_outlier is None:
-                            pending_outlier = (validated_missing, fallback.provider_name)
-                            continue
-
-                        first_bar, first_provider = pending_outlier
-                        if not self._bars_corroborate(first_bar, validated_missing):
-                            continue
-
-                        accepted_bar = validated_missing
-                        accepted_provider = (
-                            f"{first_provider} + {fallback.provider_name} confirmed discontinuity"
-                        )
-                    else:
-                        accepted_bar = validated_missing
-                        accepted_provider = missing_bar.get(
-                            "actual_provider", fallback.provider_name
-                        )
-
-                    if not any(
-                        b.get("session_date") == accepted_bar.get("session_date")
-                        for b in best_bars
-                    ):
-                        best_bars.append(accepted_bar)
-                        best_bars.sort(key=lambda x: x["session_date"])
-                    best_sessions_behind = 0
-                    best_provider = f"{best_provider} + {accepted_provider}"
+            recovered_providers: List[str] = []
+            for missing_date in missing_sessions:
+                missing_date_str = missing_date.isoformat()
+                recovered_bar, recovered_provider = self._recover_one_missing_session(
+                    best_bars=best_bars,
+                    ticker=clean_ticker,
+                    session_date=missing_date_str,
+                    english_name=english_name,
+                )
+                if recovered_bar is None:
+                    # Keep the series contiguous. Do not skip a missing session and
+                    # append a later one, because indicators would then be based on
+                    # an incomplete EOD sequence.
                     break
-                except Exception:
-                    continue
+
+                if not any(
+                    b.get("session_date") == recovered_bar.get("session_date")
+                    for b in best_bars
+                ):
+                    best_bars.append(recovered_bar)
+                    best_bars.sort(key=lambda x: x["session_date"])
+                if recovered_provider:
+                    recovered_providers.append(recovered_provider)
+
+            if best_bars:
+                final_latest_date = datetime.date.fromisoformat(best_bars[-1]["session_date"])
+                best_sessions_behind = calculate_sessions_behind(final_latest_date, now_cairo)
+                if recovered_providers:
+                    unique_recovered = list(dict.fromkeys(recovered_providers))
+                    best_provider = (
+                        f"{best_provider} + " + " + ".join(unique_recovered)
+                    )
 
         if not best_bars:
             return {
@@ -299,7 +372,7 @@ class ProviderManager:
                 "freshness": "DATA_UNAVAILABLE",
                 "freshness_ar": "غير متاح",
                 "current_analysis_eligible": False,
-                "bars": []
+                "bars": [],
             }
 
         validated_bars = best_bars
@@ -327,7 +400,7 @@ class ProviderManager:
                         db.query(EGXCandle)
                         .filter(
                             EGXCandle.ticker == clean_ticker,
-                            EGXCandle.session_date == b["session_date"]
+                            EGXCandle.session_date == b["session_date"],
                         )
                         .first()
                     )
@@ -341,7 +414,7 @@ class ProviderManager:
                             close=b["close"],
                             volume=b["volume"],
                             actual_provider=b.get("actual_provider", active_provider),
-                            validation_status=b["validation_status"]
+                            validation_status=b["validation_status"],
                         )
                         db.add(candle_record)
                 db.commit()
@@ -360,14 +433,21 @@ class ProviderManager:
             "freshness": freshness_label,
             "freshness_ar": freshness_ar,
             "current_analysis_eligible": is_eligible,
-            "bars": validated_bars
+            "bars": validated_bars,
         }
 
     def get_analytical_bars(
-        self, ticker: str, limit: int = 250, db: Optional[Session] = None, force_refresh: bool = False
+        self,
+        ticker: str,
+        limit: int = 250,
+        db: Optional[Session] = None,
+        force_refresh: bool = False,
     ) -> Dict[str, Any]:
         raw_result = self.get_raw_historical_bars(
-            ticker, limit=limit, db=db, force_refresh=force_refresh
+            ticker,
+            limit=limit,
+            db=db,
+            force_refresh=force_refresh,
         )
         if raw_result["status"] == "DATA_UNAVAILABLE":
             return raw_result
@@ -379,10 +459,10 @@ class ProviderManager:
             1 for b in raw_bars if b.get("hlcv_status") != "VALID"
         )
         open_unverified_count = sum(
-            1 for b in raw_bars
-            if b.get("open_status") in (
-                "OPEN_UNVERIFIED", "OPEN_REFERENCE_ARTIFACT", "INVALID_OPEN"
-            )
+            1
+            for b in raw_bars
+            if b.get("open_status")
+            in ("OPEN_UNVERIFIED", "OPEN_REFERENCE_ARTIFACT", "INVALID_OPEN")
         )
 
         first_session = analytical_bars[0]["session_date"] if analytical_bars else None
@@ -414,7 +494,7 @@ class ProviderManager:
             "freshness": raw_result.get("freshness", "DATA_NOT_CURRENT"),
             "freshness_ar": raw_result.get("freshness_ar", "غير محدث"),
             "current_analysis_eligible": is_eligible,
-            "bars": analytical_bars
+            "bars": analytical_bars,
         }
 
 
