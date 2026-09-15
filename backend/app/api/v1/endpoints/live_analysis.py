@@ -62,10 +62,18 @@ def save_manual_eod(req: ManualEODRequest, db: Session = Depends(get_db)):
     }
     validated = CandleValidator.validate_bar(raw_bar)
 
-    if validated.get("hlcv_status") != "VALID" or validated.get("open_status") != "RAW_OPEN":
+    # Some broker screens can publish an Open/reference value that sits slightly
+    # outside the reported High/Low range. Preserve that value exactly instead of
+    # fabricating a replacement. The technical engine uses validated HLCV for its
+    # indicators, so an unverified Open is allowed as long as HLCV itself is valid.
+    if validated.get("hlcv_status") != "VALID" or validated.get("open_status") == "INVALID_OPEN":
         raise HTTPException(
             status_code=400,
-            detail="بيانات الجلسة غير منطقية. يجب أن يكون Low <= Open/Close <= High وأن تكون القيم موجبة والحجم غير سالب.",
+            detail=(
+                "بيانات الجلسة غير منطقية. يجب أن يكون High >= Low، وأن يقع Close بينهما، "
+                "وأن تكون الأسعار موجبة والحجم غير سالب. يمكن قبول Open الموجب خارج النطاق "
+                "كقيمة مرجعية غير موثوقة ولن يعتمد عليه التحليل الفني."
+            ),
         )
 
     existing = (
@@ -112,12 +120,20 @@ def save_manual_eod(req: ManualEODRequest, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail="تعذر حفظ بيانات الجلسة يدويًا.")
 
+    if validated.get("open_status") == "RAW_OPEN":
+        message_ar = "تم حفظ الجلسة المدخلة يدويًا والتحقق من OHLCV. أعد التحليل الآن."
+    else:
+        message_ar = (
+            "تم حفظ الجلسة والتحقق من High/Low/Close/Volume. قيمة Open من الوسيط محفوظة "
+            "كمرجع غير موثوق لأنها خارج نطاق الجلسة، ولن يعتمد عليها التحليل الفني."
+        )
+
     return {
         "status": "SUCCESS",
         "ticker": sec.ticker,
         "session_date": req.session_date,
         "actual_provider": "USER_VERIFIED_EOD",
-        "message_ar": "تم حفظ الجلسة المدخلة يدويًا والتحقق من OHLCV. أعد التحليل الآن.",
+        "message_ar": message_ar,
     }
 
 
