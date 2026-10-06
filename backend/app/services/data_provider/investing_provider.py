@@ -221,8 +221,14 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
         if not instrument_id:
             return []
         bars = self._fetch_chart(clean_ticker, instrument_id, limit)
-        if not bars and clean_ticker == "BIOC":
-            return self._fetch_bioc_page_history(limit)
+        if clean_ticker == "BIOC":
+            from app.services.egx_calendar import get_expected_latest_completed_session
+            expected = get_expected_latest_completed_session().isoformat()
+            if not bars or max(bar["session_date"] for bar in bars) < expected:
+                regional = self._fetch_bioc_page_history(limit)
+                merged = {bar["session_date"]: bar for bar in bars}
+                merged.update({bar["session_date"]: bar for bar in regional})
+                return [merged[date] for date in sorted(merged)][-limit:]
         return bars
 
     @classmethod
@@ -272,14 +278,28 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
         return [bars[date] for date in sorted(bars)]
 
     def _fetch_bioc_page_history(self, limit: int) -> List[Dict[str, Any]]:
+        from app.services.egx_calendar import get_expected_latest_completed_session
+        expected = get_expected_latest_completed_session().isoformat()
+        best = []
         try:
             from curl_cffi import requests
             with requests.Session(impersonate="chrome124") as session:
-                response = session.get(INVESTING_PAGE_MAP["BIOC"] + "-historical-data", timeout=15)
-                response.raise_for_status()
-                return self._parse_bioc_page_history(response.text)[-limit:]
+                # Regional editions can expose a completed session before www.
+                for host in ("sa.investing.com", "za.investing.com", "www.investing.com"):
+                    try:
+                        url = f"https://{host}/equities/glaxo-egypt-historical-data"
+                        response = session.get(url, timeout=15)
+                        response.raise_for_status()
+                        bars = self._parse_bioc_page_history(response.text)
+                        if bars and (not best or bars[-1]["session_date"] > best[-1]["session_date"]):
+                            best = bars
+                        if best and best[-1]["session_date"] == expected:
+                            return best[-limit:]
+                    except Exception:
+                        continue
         except Exception:
-            return []
+            pass
+        return best[-limit:]
 
     def fetch_historical_bars(self, ticker: str, limit: int = 250) -> List[Dict[str, Any]]:
         return self.fetch_historical_bars_for_security(ticker=ticker, english_name=None, limit=limit)

@@ -59,7 +59,8 @@ EGX_HOLIDAYS_SET: Set[datetime.date] = {
     datetime.date(2026, 6, 30),
     datetime.date(2026, 7, 23),
     datetime.date(2026, 8, 25),
-    datetime.date(2026, 10, 6),
+    # Armed Forces Day closure was moved to Thursday, October 8 in 2026.
+    datetime.date(2026, 10, 8),
 }
 
 def is_egx_trading_day(d: datetime.date) -> bool:

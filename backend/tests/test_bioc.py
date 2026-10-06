@@ -145,6 +145,40 @@ def test_page_fallback_rejects_future_or_invalid_rows(monkeypatch, changes):
     assert InvestingHistoricalProvider._parse_bioc_page_history(history_html(row_changes=changes)) == []
 
 
+def test_regional_page_advances_to_latest_completed_session(monkeypatch):
+    monkeypatch.setattr("app.services.egx_calendar.get_expected_latest_completed_session", lambda: datetime.date(2026, 10, 6))
+    old_page = history_html()
+    new_page = history_html(row_changes={"rowDateTimestamp": "2026-10-06T00:00:00Z",
+                                       "last_openRaw": "339", "last_closeRaw": "336.30", "last_minRaw": "336"})
+    provider = InvestingHistoricalProvider()
+    with patch("curl_cffi.requests.Session.get", side_effect=[Mock(text=old_page), Mock(text=new_page)]) as get:
+        bars = provider._fetch_bioc_page_history(160)
+    assert bars[-1]["session_date"] == "2026-10-06"
+    assert bars[-1]["close"] == 336.30
+    assert get.call_count == 2
+    assert "sa.investing.com" in get.call_args_list[0].args[0]
+
+
+def test_regional_history_completes_stale_chart_without_dropping_baseline(monkeypatch):
+    monkeypatch.setattr("app.services.egx_calendar.get_expected_latest_completed_session", lambda: datetime.date(2026, 10, 6))
+    provider = InvestingHistoricalProvider()
+    old = provider._parse_bioc_page_history(history_html())
+    new = provider._parse_bioc_page_history(history_html(row_changes={"rowDateTimestamp": "2026-10-06T00:00:00Z"}))
+    with patch.object(provider, "_fetch_chart", return_value=old), patch.object(provider, "_fetch_bioc_page_history", return_value=new):
+        bars = provider.fetch_historical_bars("BIOC")
+    assert [bar["session_date"] for bar in bars] == ["2026-10-05", "2026-10-06"]
+
+
+def test_bioc_company_profile_records_regional_quote_source():
+    html = snapshot_html(symbol="BIOC", isin=BIOC_ISIN)
+    with patch("curl_cffi.requests.Session.get", return_value=Mock(text=html)) as get:
+        profile = get_bioc_company_profile()
+    assert profile["metrics_source"] == "https://sa.investing.com/equities/glaxo-egypt"
+    assert profile["metrics"]["price"] == 10
+    assert profile["quote_updated_at"] is not None
+    assert get.call_count == 1
+
+
 def test_bioc_uses_verified_investing_before_generic_providers(monkeypatch):
     import app.services.data_provider.manager as manager_module
     expected = datetime.date(2026, 10, 5)

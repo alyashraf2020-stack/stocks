@@ -79,10 +79,12 @@ def get_mpci_company_profile():
 def get_bioc_company_profile():
     return _get_company_profile("BIOC", BIOC_ISIN, BIOC_URL,
                                 "https://www.gsk.com/en-gb/locations/egypt/",
-                                "جلاكسو سميث كلاين ش.م.م. شركة مدرجة في البورصة المصرية تعمل في إنتاج المستحضرات الدوائية والكيماويات الدوائية.")
+                                "جلاكسو سميث كلاين ش.م.م. شركة مدرجة في البورصة المصرية تعمل في إنتاج المستحضرات الدوائية والكيماويات الدوائية.",
+                                provider_urls=["https://sa.investing.com/equities/glaxo-egypt",
+                                               "https://za.investing.com/equities/glaxo-egypt", BIOC_URL])
 
 
-def _get_company_profile(ticker, isin, provider_url, company_url, description, listed_on=None):
+def _get_company_profile(ticker, isin, provider_url, company_url, description, listed_on=None, provider_urls=None):
     identity_url = f"https://www.egx.com.eg/ar/CompanyDetails.aspx?ISIN={isin}"
     profile = {
         "ticker": ticker, "currency": "EGP", "listed_on": listed_on,
@@ -103,11 +105,17 @@ def _get_company_profile(ticker, isin, provider_url, company_url, description, l
     try:
         from curl_cffi import requests
         with requests.Session(impersonate="chrome124") as session:
-            response = session.get(provider_url, timeout=15)
-            response.raise_for_status()
-            profile.update(parse_snapshot(response.text, ticker=ticker, isin=isin))
-        values = profile["metrics"].values()
-        profile["status"] = "AVAILABLE" if all(v is not None for v in values) else "PARTIAL"
+            for url in provider_urls or [provider_url]:
+                try:
+                    response = session.get(url, timeout=15)
+                    response.raise_for_status()
+                    profile.update(parse_snapshot(response.text, ticker=ticker, isin=isin))
+                    profile["metrics_source"] = url
+                    values = profile["metrics"].values()
+                    profile["status"] = "AVAILABLE" if all(v is not None for v in values) else "PARTIAL"
+                    break
+                except Exception:
+                    continue
     except Exception:
         # Company identity and official links remain available during provider outages.
         pass
