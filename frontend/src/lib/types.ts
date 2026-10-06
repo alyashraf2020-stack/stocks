@@ -19,6 +19,21 @@ export interface Stock {
   current_analysis_eligible?: boolean | null;
 }
 
+export interface CompanyProfile {
+  ticker: string;
+  currency: string;
+  listed_on: string;
+  description_ar: string;
+  identity_source: string;
+  metrics_source: string;
+  fetched_at: string;
+  quote_updated_at: string | null;
+  is_delayed: boolean | null;
+  status: "AVAILABLE" | "PARTIAL" | "UNAVAILABLE";
+  metrics: Record<string, number | null>;
+  resources: { label: string; url: string }[];
+}
+
 export interface StockListResponse {
   total: number;
   provenance_source: string;

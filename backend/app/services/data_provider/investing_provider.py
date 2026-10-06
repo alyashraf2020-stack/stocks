@@ -8,6 +8,7 @@ from app.services.data_provider.base import BaseHistoricalProvider
 INVESTING_INSTRUMENT_MAP: Dict[str, int] = {
     "KORA": 1244005,  # Korra for Energy and Investment Projects (Korra Energi)
     "EGAL": 40587,    # Egypt Aluminum (EGAL)
+    "MBSC": 12965,    # Misr Beni Suef Cement, ISIN EGS3C371C019
 }
 
 class InvestingHistoricalProvider(BaseHistoricalProvider):

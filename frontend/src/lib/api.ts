@@ -1,4 +1,4 @@
-import { StockListResponse, Stock, ChartData, LiveAnalysisResult, MarketStatus } from "./types";
+import { StockListResponse, Stock, ChartData, LiveAnalysisResult, MarketStatus, CompanyProfile } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
 
@@ -34,6 +34,12 @@ export async function getSectors(): Promise<string[]> {
 export async function getStockDetail(ticker: string): Promise<Stock> {
   const res = await fetch(`${API_BASE}/egx/stocks/${ticker}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`تعذر جلب بيانات السهم ${ticker}`);
+  return res.json();
+}
+
+export async function getStockCompany(ticker: string): Promise<CompanyProfile> {
+  const res = await fetch(`${API_BASE}/egx/stocks/${ticker}/company`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`تعذر جلب ملف الشركة ${ticker}`);
   return res.json();
 }
 

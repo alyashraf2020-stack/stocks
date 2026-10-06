@@ -18,6 +18,7 @@ import {
 import { getStockDetail, getStockChart, refreshStockData } from "@/lib/api";
 import { Stock, ChartData } from "@/lib/types";
 import InteractiveCandleChart from "@/components/InteractiveCandleChart";
+import CompanyProfileCard from "@/components/CompanyProfileCard";
 
 export default function StockDetailPage() {
   const params = useParams();
@@ -30,20 +31,20 @@ export default function StockDetailPage() {
   const [chartLoading, setChartLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [companyRefreshKey, setCompanyRefreshKey] = useState(0);
 
   const handleRefresh = async () => {
     if (!ticker || refreshing) return;
     setRefreshing(true);
     try {
-      const [updatedStock, updatedChart] = await Promise.all([
-        refreshStockData(ticker),
-        getStockChart(ticker, range)
-      ]);
+      const updatedStock = await refreshStockData(ticker);
       setStock(updatedStock);
+      const updatedChart = await getStockChart(ticker, range);
       setChartData(updatedChart);
     } catch (err: any) {
       console.error("Failed to refresh stock data:", err);
     } finally {
+      setCompanyRefreshKey((value) => value + 1);
       setRefreshing(false);
     }
   };
@@ -203,6 +204,9 @@ export default function StockDetailPage() {
       )}
 
       {/* Technical Metadata & Provenance Footer */}
+      {stock.ticker === "MBSC" && <CompanyProfileCard ticker={stock.ticker}
+        refreshKey={companyRefreshKey} latestBar={chartData?.bars[chartData.bars.length - 1]} />}
+
       <div className="bg-surface border border-surfaceBorder rounded-xl p-4 text-xs text-gray-400 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-primary" />

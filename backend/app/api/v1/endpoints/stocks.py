@@ -16,6 +16,7 @@ from app.services.egx_calendar import (
     CAIRO_TZ
 )
 from app.models.candle import EGXCandle
+from app.services.company_profile import get_mbsc_company_profile
 
 router = APIRouter()
 
@@ -180,3 +181,11 @@ def get_stock_chart(
         "actual_provider": data_res.get("actual_provider"),
         "bars": sliced_bars
     }
+
+
+@router.get("/{ticker}/company")
+def get_stock_company_profile(ticker: str, db: Session = Depends(get_db)):
+    sec = SecurityMasterService.get_by_ticker(db, ticker)
+    if not sec or sec.ticker != "MBSC":
+        raise HTTPException(status_code=404, detail="ملف الشركة غير متاح لهذا السهم")
+    return get_mbsc_company_profile()
