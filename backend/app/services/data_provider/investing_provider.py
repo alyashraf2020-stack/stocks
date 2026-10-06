@@ -304,7 +304,43 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
     def fetch_historical_bars(self, ticker: str, limit: int = 250) -> List[Dict[str, Any]]:
         return self.fetch_historical_bars_for_security(ticker=ticker, english_name=None, limit=limit)
 
+    def _bioc_chart_headers(self) -> Optional[Dict[str, str]]:
+        """Use the anonymous request context supplied by the public EGX page.
+
+        The website's chart client sends its edition and public page token.
+        Neither this context nor the token is persisted or logged.
+        """
+        from app.services.company_profile import parse_snapshot, BIOC_ISIN
+        from curl_cffi import requests
+
+        for edition in ("sa", "za"):
+            try:
+                page_url = f"https://{edition}.investing.com/equities/glaxo-egypt-historical-data"
+                with requests.Session(impersonate="chrome124") as session:
+                    response = session.get(page_url, timeout=15)
+                    response.raise_for_status()
+                parse_snapshot(response.text, ticker="BIOC", isin=BIOC_ISIN)
+                match = re.search(r'<script\b(?=[^>]*\bid="__NEXT_DATA__")[^>]*>(.*?)</script>', response.text, re.DOTALL)
+                props = json.loads(match.group(1))["props"]["pageProps"]
+                instrument = props["state"]["equityStore"]["instrument"]
+                token = props.get("accessToken")
+                if (instrument["underlying"]["market"] != "Egypt"
+                        or str(instrument["base"]["id"]) != "12975"
+                        or props.get("subdomain") != edition
+                        or not isinstance(token, str) or not token):
+                    continue
+                headers = self._headers()
+                headers.update({"domain-id": edition, "Authorization": "Bearer " + token,
+                                "Referer": page_url, "Origin": f"https://{edition}.investing.com"})
+                return headers
+            except Exception:
+                continue
+        return None
+
     def _fetch_chart(self, clean_ticker: str, instrument_id: int, limit: int) -> List[Dict[str, Any]]:
+        headers = self._bioc_chart_headers() if clean_ticker == "BIOC" else self._headers()
+        if headers is None:
+            return []
         allowed_points = [60, 70, 90, 110, 120, 140, 160]
         points = next((pt for pt in allowed_points if pt >= limit), 160)
         url = (
@@ -316,7 +352,7 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
         for _attempt in range(1 if clean_ticker == "BIOC" else 3):
             try:
                 session = requests.Session(impersonate="chrome124")
-                response = session.get(url, headers=self._headers(), timeout=20)
+                response = session.get(url, headers=headers, timeout=20)
                 if response.status_code != 200:
                     time.sleep(1)
                     continue

@@ -258,7 +258,7 @@ class ProviderManager:
                         now_cairo,
                     )
 
-                    if cached_baseline_sessions_behind == 0:
+                    if cached_baseline_sessions_behind == 0 and (len(cached_validated) >= 50 or not allow_network):
                         has_min_history = len(cached_validated) >= 50
                         is_eligible = has_min_history
                         status = "SUCCESS" if is_eligible else "INSUFFICIENT_DATA"

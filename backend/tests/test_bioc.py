@@ -179,6 +179,82 @@ def test_bioc_company_profile_records_regional_quote_source():
     assert get.call_count == 1
 
 
+def chart_context_html(changes=None, token="anonymous-public-page-token", edition="sa"):
+    html = history_html(instrument_changes=changes)
+    payload = json.loads(html.split(">", 1)[1].rsplit("</script>", 1)[0])
+    payload["props"]["pageProps"].update(accessToken=token, subdomain=edition)
+    return '<script id="__NEXT_DATA__">' + json.dumps(payload) + '</script>'
+
+
+def test_chart_uses_verified_public_page_context_for_full_history():
+    timestamp = int(datetime.datetime(2026, 10, 6, tzinfo=datetime.timezone.utc).timestamp() * 1000)
+    quote = Mock(text=chart_context_html())
+    chart = Mock(status_code=200)
+    chart.json.return_value = {"data": [[timestamp, 340, 359.5, 336, 336.3, 479543]]}
+    with patch("curl_cffi.requests.Session.get", side_effect=[quote, chart]) as get:
+        bars = InvestingHistoricalProvider()._fetch_chart("BIOC", 12975, 160)
+    assert bars[0]["session_date"] == "2026-10-06"
+    assert bars[0]["close"] == 336.3
+    api_call = get.call_args_list[1]
+    assert "/financialdata/12975/historical/chart/" in api_call.args[0]
+    assert api_call.kwargs["headers"]["domain-id"] == "sa"
+    assert api_call.kwargs["headers"]["Authorization"] == "Bearer anonymous-public-page-token"
+
+
+@pytest.mark.parametrize("changes", [{"name.symbol": "OTHER"}, {"underlying.isin": "OTHER"},
+                                      {"price.currency": "USD"}, {"underlying.market": "United States"},
+                                      {"base.id": "999999"}])
+def test_chart_does_not_request_api_for_wrong_page_identity(changes):
+    with patch("curl_cffi.requests.Session.get", return_value=Mock(text=chart_context_html(changes=changes))) as get:
+        assert InvestingHistoricalProvider()._fetch_chart("BIOC", 12975, 160) == []
+    assert all("api.investing.com" not in call.args[0] for call in get.call_args_list)
+
+
+def test_chart_without_public_context_falls_back_without_fabrication():
+    with patch("curl_cffi.requests.Session.get", return_value=Mock(text=chart_context_html(token=None))):
+        assert InvestingHistoricalProvider()._fetch_chart("BIOC", 12975, 160) == []
+
+
+@pytest.mark.parametrize("allow_network", [False, True])
+def test_fresh_but_short_cache_can_fetch_longer_history(db, monkeypatch, allow_network):
+    from tests.test_stock_plans import bars
+    import app.services.data_provider.manager as manager_module
+
+    expected = datetime.date(2026, 10, 6)
+    monkeypatch.setattr(manager_module, "get_expected_latest_completed_session", lambda now=None: expected)
+    monkeypatch.setattr(manager_module, "calculate_sessions_behind", lambda latest, now=None: 0 if latest == expected else 1)
+    short = bars(ticker="BIOC", end=expected, count=23)
+    for bar in short:
+        db.add(EGXCandle(**bar))
+    db.commit()
+    provider = InvestingHistoricalProvider()
+    manager = ProviderManager(primary_provider=provider, fallback_providers=[Mock()])
+    fetch = Mock(return_value=bars(ticker="BIOC", end=expected, count=60))
+    monkeypatch.setattr(manager, "_fetch_provider_bars", fetch)
+    result = manager.get_analytical_bars("BIOC", db=db, allow_network=allow_network)
+    assert result["analytical_bars_count"] == (60 if allow_network else 23)
+    assert result["current_analysis_eligible"] is allow_network
+    assert fetch.call_count == (1 if allow_network else 0)
+
+
+def test_failed_longer_history_request_preserves_short_cache(db, monkeypatch):
+    from tests.test_stock_plans import bars
+    import app.services.data_provider.manager as manager_module
+
+    expected = datetime.date(2026, 10, 6)
+    monkeypatch.setattr(manager_module, "get_expected_latest_completed_session", lambda now=None: expected)
+    monkeypatch.setattr(manager_module, "calculate_sessions_behind", lambda latest, now=None: 0 if latest == expected else 1)
+    for bar in bars(ticker="BIOC", end=expected, count=23):
+        db.add(EGXCandle(**bar))
+    db.commit()
+    manager = ProviderManager(primary_provider=InvestingHistoricalProvider(), fallback_providers=[Mock()])
+    monkeypatch.setattr(manager, "_fetch_provider_bars", Mock(return_value=[]))
+    result = manager.get_analytical_bars("BIOC", db=db)
+    assert result["status"] == "INSUFFICIENT_DATA"
+    assert result["analytical_bars_count"] == 23
+    assert db.query(EGXCandle).filter_by(ticker="BIOC").count() == 23
+
+
 def test_bioc_uses_verified_investing_before_generic_providers(monkeypatch):
     import app.services.data_provider.manager as manager_module
     expected = datetime.date(2026, 10, 5)
