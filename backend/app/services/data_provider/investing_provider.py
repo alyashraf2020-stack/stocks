@@ -1,5 +1,7 @@
 import datetime
 import html as html_lib
+import json
+import math
 import re
 import time
 from typing import List, Dict, Any, Optional, Iterable
@@ -155,7 +157,7 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
 
     def _resolve_metadata(self, ticker: str, english_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
         clean_ticker = ticker.strip().upper()
-        if clean_ticker in self._resolved_cache:
+        if clean_ticker in self._resolved_cache and clean_ticker not in INVESTING_INSTRUMENT_MAP:
             return {
                 "id": self._resolved_cache[clean_ticker],
                 "url": self._resolved_url_cache.get(clean_ticker),
@@ -218,7 +220,66 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
         instrument_id = self._resolve_instrument_id(clean_ticker, english_name)
         if not instrument_id:
             return []
-        return self._fetch_chart(clean_ticker, instrument_id, limit)
+        bars = self._fetch_chart(clean_ticker, instrument_id, limit)
+        if not bars and clean_ticker == "BIOC":
+            return self._fetch_bioc_page_history(limit)
+        return bars
+
+    @classmethod
+    def _parse_bioc_page_history(cls, raw_html: str) -> List[Dict[str, Any]]:
+        """Read dated history rows only, after checking the Egyptian identity."""
+        from app.services.egx_calendar import get_expected_latest_completed_session, is_egx_trading_day
+
+        try:
+            match = re.search(r'<script\b(?=[^>]*\bid="__NEXT_DATA__")[^>]*>(.*?)</script>', raw_html, re.DOTALL)
+            state = json.loads(match.group(1))["props"]["pageProps"]["state"]
+            instrument = state["equityStore"]["instrument"]
+            if (instrument["name"]["symbol"] != "BIOC"
+                    or instrument["underlying"]["isin"] != "EGS38171C012"
+                    or instrument["underlying"]["market"] != "Egypt"
+                    or instrument["price"]["currency"] != "EGP"
+                    or str(instrument["base"]["id"]) != "12975"):
+                return []
+            rows = state["historicalDataStore"]["historicalData"]["data"]
+            expected = get_expected_latest_completed_session()
+        except (AttributeError, KeyError, TypeError, ValueError):
+            return []
+
+        bars = {}
+        for row in rows:
+            try:
+                date = datetime.datetime.fromisoformat(row["rowDateTimestamp"].replace("Z", "+00:00")).date()
+                if date > expected or not is_egx_trading_day(date):
+                    continue
+                values = {}
+                for field, source in (("open", "last_open"), ("high", "last_max"),
+                                      ("low", "last_min"), ("close", "last_close"), ("volume", "volume")):
+                    value = row.get(source + "Raw")
+                    values[field] = cls._to_number(value if value is not None else row.get(source))
+                if any(value is None or not math.isfinite(value) for value in values.values()):
+                    continue
+                if min(values[field] for field in ("open", "high", "low", "close")) <= 0 or values["volume"] < 0:
+                    continue
+                if values["high"] < max(values["open"], values["low"], values["close"]) or values["low"] > min(values["open"], values["close"]):
+                    continue
+                bars[date.isoformat()] = {
+                    "ticker": "BIOC", "session_date": date.isoformat(), **values,
+                    "actual_provider": "Investing Verified BIOC Historical Page",
+                    "fetched_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                }
+            except (AttributeError, KeyError, TypeError, ValueError):
+                continue
+        return [bars[date] for date in sorted(bars)]
+
+    def _fetch_bioc_page_history(self, limit: int) -> List[Dict[str, Any]]:
+        try:
+            from curl_cffi import requests
+            with requests.Session(impersonate="chrome124") as session:
+                response = session.get(INVESTING_PAGE_MAP["BIOC"] + "-historical-data", timeout=15)
+                response.raise_for_status()
+                return self._parse_bioc_page_history(response.text)[-limit:]
+        except Exception:
+            return []
 
     def fetch_historical_bars(self, ticker: str, limit: int = 250) -> List[Dict[str, Any]]:
         return self.fetch_historical_bars_for_security(ticker=ticker, english_name=None, limit=limit)
@@ -232,7 +293,7 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
         )
 
         from curl_cffi import requests
-        for _attempt in range(3):
+        for _attempt in range(1 if clean_ticker == "BIOC" else 3):
             try:
                 session = requests.Session(impersonate="chrome124")
                 response = session.get(url, headers=self._headers(), timeout=20)
@@ -442,8 +503,9 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
 
 
 # Extend verified mappings separately to keep previously resolved merge blocks stable.
-INVESTING_INSTRUMENT_MAP.update({"MPCI": 40612})
+INVESTING_INSTRUMENT_MAP.update({"MPCI": 40612, "BIOC": 12975})
 INVESTING_PAGE_MAP: Dict[str, str] = {
     "MBSC": "https://www.investing.com/equities/misr-beni-suef-cement",
     "MPCI": "https://www.investing.com/equities/memphis-pharmaceuticals",
+    "BIOC": "https://www.investing.com/equities/glaxo-egypt",
 }

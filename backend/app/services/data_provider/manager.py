@@ -301,6 +301,9 @@ class ProviderManager:
             }
 
         all_providers = [self.primary_provider] + self.fallback_providers
+        if clean_ticker == "BIOC":
+            # Prefer the verified Egyptian instrument over ambiguous ticker searches.
+            all_providers.sort(key=lambda provider: not isinstance(provider, InvestingHistoricalProvider))
         current_outlier_candidates: List[Tuple[str, List[Dict[str, Any]]]] = []
 
         for provider in all_providers:

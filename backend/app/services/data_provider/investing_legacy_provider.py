@@ -1,7 +1,7 @@
 from typing import Optional
 from urllib.parse import quote_plus
 
-from app.services.data_provider.investing_provider import InvestingHistoricalProvider
+from app.services.data_provider.investing_provider import InvestingHistoricalProvider, INVESTING_INSTRUMENT_MAP
 
 
 KNOWN_QUOTE_URLS = {
@@ -28,6 +28,12 @@ class InvestingLegacySearchProvider(InvestingHistoricalProvider):
         english_name: Optional[str] = None,
     ) -> Optional[int]:
         clean_ticker = ticker.strip().upper()
+
+        # Verified identities must take precedence over older ambiguous searches.
+        if clean_ticker in INVESTING_INSTRUMENT_MAP:
+            resolved = super()._resolve_instrument_id(clean_ticker, english_name)
+            if self._resolved_url_cache.get(clean_ticker):
+                return resolved
 
         cached_id = self._resolved_cache.get(clean_ticker)
         cached_url = self._resolved_url_cache.get(clean_ticker)

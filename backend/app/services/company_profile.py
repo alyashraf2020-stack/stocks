@@ -8,6 +8,8 @@ MBSC_URL = "https://www.investing.com/equities/misr-beni-suef-cement"
 MBSC_ISIN = "EGS3C371C019"
 MPCI_URL = "https://www.investing.com/equities/memphis-pharmaceuticals"
 MPCI_ISIN = "EGS38351C010"
+BIOC_URL = "https://www.investing.com/equities/glaxo-egypt"
+BIOC_ISIN = "EGS38171C012"
 
 
 def finite_number(value):
@@ -72,6 +74,12 @@ def get_mbsc_company_profile():
 def get_mpci_company_profile():
     return _get_company_profile("MPCI", MPCI_ISIN, MPCI_URL, "https://www.memphis.com.eg/",
                                 "شركة مصرية تعمل في صناعة المستحضرات الدوائية والصناعات الكيماوية.")
+
+
+def get_bioc_company_profile():
+    return _get_company_profile("BIOC", BIOC_ISIN, BIOC_URL,
+                                "https://www.gsk.com/en-gb/locations/egypt/",
+                                "جلاكسو سميث كلاين ش.م.م. شركة مدرجة في البورصة المصرية تعمل في إنتاج المستحضرات الدوائية والكيماويات الدوائية.")
 
 
 def _get_company_profile(ticker, isin, provider_url, company_url, description, listed_on=None):

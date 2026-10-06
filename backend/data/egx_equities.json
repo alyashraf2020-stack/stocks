@@ -721,14 +721,14 @@
     },
     {
       "ticker": "BIOC",
-      "arabic_name": "بيوجينكس فارما",
-      "english_name": "Biogenyx Pharma",
-      "isin": "EGS72AV1C011",
+      "arabic_name": "جلاكسو سميث كلاين",
+      "english_name": "GlaxoSmithKline SAE",
+      "isin": "EGS38171C012",
       "sector": "الرعاية الصحية والأدوية",
       "listing_status": "ACTIVE",
-      "indices": [
-        "تميز"
-      ]
+      "indices": [],
+      "source": "https://www.investing.com/equities/glaxo-egypt",
+      "source_updated_at": "2026-10-06T15:07:00.151837+00:00"
     },
     {
       "ticker": "ICDH",
