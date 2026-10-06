@@ -204,7 +204,7 @@ export default function StockDetailPage() {
       )}
 
       {/* Technical Metadata & Provenance Footer */}
-      {stock.ticker === "MBSC" && <CompanyProfileCard ticker={stock.ticker}
+      {["MBSC", "MPCI"].includes(stock.ticker) && <CompanyProfileCard ticker={stock.ticker}
         refreshKey={companyRefreshKey} latestBar={chartData?.bars[chartData.bars.length - 1]} />}
 
       <div className="bg-surface border border-surfaceBorder rounded-xl p-4 text-xs text-gray-400 flex flex-wrap items-center justify-between gap-3">

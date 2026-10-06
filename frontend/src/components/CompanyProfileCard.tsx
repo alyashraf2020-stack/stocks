@@ -53,7 +53,7 @@ export default function CompanyProfileCard({ ticker, refreshKey, latestBar }: {
       <div className="space-y-2">
         <h2 className="text-lg font-bold text-white">ملف الشركة والمؤشرات المالية</h2>
         <p className="text-sm text-gray-300">{profile.description_ar}</p>
-        <p className="text-xs text-gray-400">تاريخ القيد: {profile.listed_on} · العملة: الجنيه المصري</p>
+        <p className="text-xs text-gray-400">تاريخ القيد: {profile.listed_on || "غير متاح"} · العملة: الجنيه المصري</p>
       </div>
       <div className="text-xs text-gray-400 space-y-1">
         <p>مصدر الملخص: Investing.com · {profile.is_delayed === false ? "كما يعرضه المصدر" : profile.is_delayed === true ? "بيانات متأخرة" : "التأخير غير محدد"}</p>

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { TrendingUp, BarChart3, Clock, Compass } from "lucide-react";
+import { TrendingUp, BarChart3, Clock, Compass, ListChecks } from "lucide-react";
 import { getMarketStatus } from "@/lib/api";
 import { MarketStatus } from "@/lib/types";
 
@@ -20,13 +20,14 @@ export default function Navbar() {
   const navLinks = [
     { href: "/", label: "اليوم", icon: Clock },
     { href: "/stocks", label: "الأسهم", icon: Compass },
+    { href: "/plans", label: "خطط كل الأسهم", icon: ListChecks },
     { href: "/live-analysis", label: "تحليل السعر الحالي", icon: TrendingUp },
   ];
 
   return (
     <header className="bg-surface/95 backdrop-blur sticky top-0 z-50 border-b border-surfaceBorder">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex flex-wrap items-center justify-between gap-2 min-h-16 py-2">
           {/* Logo & Platform Name */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center text-primary font-bold">

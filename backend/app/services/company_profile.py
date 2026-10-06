@@ -1,4 +1,4 @@
-"""Company identity and optional, timestamped provider metrics for MBSC."""
+"""Verified company identities and optional, timestamped provider metrics."""
 import datetime
 import json
 import math
@@ -6,6 +6,8 @@ import re
 
 MBSC_URL = "https://www.investing.com/equities/misr-beni-suef-cement"
 MBSC_ISIN = "EGS3C371C019"
+MPCI_URL = "https://www.investing.com/equities/memphis-pharmaceuticals"
+MPCI_ISIN = "EGS38351C010"
 
 
 def finite_number(value):
@@ -18,7 +20,7 @@ def finite_number(value):
         return None
 
 
-def parse_snapshot(html):
+def parse_snapshot(html, ticker="MBSC", isin=MBSC_ISIN):
     match = re.search(
         r'<script\b(?=[^>]*\bid="__NEXT_DATA__")[^>]*>(.*?)</script>',
         html, re.DOTALL,
@@ -27,8 +29,8 @@ def parse_snapshot(html):
         raise ValueError("Provider payload unavailable")
     payload = json.loads(match.group(1))
     instrument = payload["props"]["pageProps"]["state"]["equityStore"]["instrument"]
-    if (instrument["name"]["symbol"] != "MBSC"
-            or instrument["underlying"]["isin"] != MBSC_ISIN):
+    if (instrument["name"]["symbol"] != ticker
+            or instrument["underlying"]["isin"] != isin):
         raise ValueError("Provider identity mismatch")
     price = instrument.get("price", {})
     if price.get("currency") != "EGP":
@@ -62,28 +64,40 @@ def parse_snapshot(html):
 
 
 def get_mbsc_company_profile():
+    return _get_company_profile("MBSC", MBSC_ISIN, MBSC_URL, "https://mbccegypt.com/",
+                                "شركة مصرية تعمل في إنتاج وبيع الأسمنت ومواد التعبئة المرتبطة به.",
+                                listed_on="1999-08-11")
+
+
+def get_mpci_company_profile():
+    return _get_company_profile("MPCI", MPCI_ISIN, MPCI_URL, "https://www.memphis.com.eg/",
+                                "شركة مصرية تعمل في صناعة المستحضرات الدوائية والصناعات الكيماوية.")
+
+
+def _get_company_profile(ticker, isin, provider_url, company_url, description, listed_on=None):
+    identity_url = f"https://www.egx.com.eg/ar/CompanyDetails.aspx?ISIN={isin}"
     profile = {
-        "ticker": "MBSC", "currency": "EGP", "listed_on": "1999-08-11",
-        "description_ar": "شركة مصرية تعمل في إنتاج وبيع الأسمنت ومواد التعبئة المرتبطة به.",
-        "identity_source": "https://www.egx.com.eg/ar/CompanyDetails.aspx?ISIN=EGS3C371C019",
-        "metrics_source": MBSC_URL,
+        "ticker": ticker, "currency": "EGP", "listed_on": listed_on,
+        "description_ar": description,
+        "identity_source": identity_url,
+        "metrics_source": provider_url,
         "fetched_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "quote_updated_at": None, "is_delayed": None,
         "status": "UNAVAILABLE", "metrics": {},
         "resources": [
-            {"label": "القيد والإفصاحات الرسمية — البورصة المصرية", "url": "https://www.egx.com.eg/ar/CompanyDetails.aspx?ISIN=EGS3C371C019"},
-            {"label": "موقع الشركة", "url": "https://mbccegypt.com/"},
-            {"label": "القوائم المالية والتوزيعات", "url": MBSC_URL + "-financial-summary"},
-            {"label": "أخبار الشركة", "url": MBSC_URL + "-news"},
-            {"label": "الأسعار التاريخية", "url": MBSC_URL + "-historical-data"},
+            {"label": "القيد والإفصاحات الرسمية — البورصة المصرية", "url": identity_url},
+            {"label": "موقع الشركة", "url": company_url},
+            {"label": "القوائم المالية والتوزيعات", "url": provider_url + "-financial-summary"},
+            {"label": "أخبار الشركة", "url": provider_url + "-news"},
+            {"label": "الأسعار التاريخية", "url": provider_url + "-historical-data"},
         ],
     }
     try:
         from curl_cffi import requests
         with requests.Session(impersonate="chrome124") as session:
-            response = session.get(MBSC_URL, timeout=15)
+            response = session.get(provider_url, timeout=15)
             response.raise_for_status()
-            profile.update(parse_snapshot(response.text))
+            profile.update(parse_snapshot(response.text, ticker=ticker, isin=isin))
         values = profile["metrics"].values()
         profile["status"] = "AVAILABLE" if all(v is not None for v in values) else "PARTIAL"
     except Exception:

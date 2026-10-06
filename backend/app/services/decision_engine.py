@@ -2,6 +2,7 @@ from typing import Dict, Any, Optional
 from app.services.trade_plan import TradePlanEngine
 from app.services.risk_manager import RiskManager
 
+
 class LiveDecisionEngine:
     """
     Evaluates manual live price against validated technical setups.
@@ -44,10 +45,9 @@ class LiveDecisionEngine:
 
         latest_close = analytical_bars[-1]["close"] if (analytical_bars and len(analytical_bars) > 0) else None
         freshness_ar = "محدث" if (sessions_behind == 0) else "غير محدث"
+        bars_count = len(analytical_bars) if analytical_bars else 0
 
         # 1. HARD GATE: ZERO-SESSION-LAG POLICY
-        # If latest completed session is missing (sessions_behind > 0), halt immediately
-        bars_count = len(analytical_bars) if analytical_bars else 0
         if sessions_behind is not None and sessions_behind > 0:
             return {
                 "ticker": ticker,
@@ -94,7 +94,7 @@ class LiveDecisionEngine:
                 "trade_plan": None,
                 "position_sizing": None
             }
-        elif plan_result["status"] == "DATA_NOT_CURRENT":
+        if plan_result["status"] == "DATA_NOT_CURRENT":
             return {
                 "ticker": ticker,
                 "current_price": current_price,
@@ -134,8 +134,8 @@ class LiveDecisionEngine:
                 badge_color = "green"
                 actionable_new_trade = False
                 reason_ar = (
-                    f"السعر اللحظي ({current_price:.2f} ج.م) تجاوز جميع أهداف الخطة السابقة واكتملت أهداف الحركة. "
-                    "ينصح بجني الأرباح وحجز العائد لحماية المكاسب."
+                    f"السعر اللحظي ({current_price:.2f} ج.م) جاء بعد اكتمال أهداف الحركة السابقة. "
+                    "ينصح بحماية الأرباح وعدم اعتبار عدم وجود دخول جديد سببًا لإعادة الشراء."
                 )
 
             return {
@@ -158,19 +158,19 @@ class LiveDecisionEngine:
                 "sessions_behind": 0,
                 "freshness_ar": freshness_ar,
                 "actual_provider": actual_provider,
-                "analytical_bars_count": len(analytical_bars) if analytical_bars else 0,
+                "analytical_bars_count": bars_count,
                 "status": "VALID",
                 "trade_plan": trade_plan,
                 "previous_plan": previous_plan,
                 "position_sizing": None
             }
 
-        entry_min = trade_plan["entry_zone_min"]
-        entry_max = trade_plan["entry_zone_max"]
-        stop_loss = trade_plan["stop_loss"]
-        t1 = trade_plan["target_1"]
-        t2 = trade_plan["target_2"]
-        t3 = trade_plan["target_3"]
+        entry_min = float(trade_plan["entry_zone_min"])
+        entry_max = float(trade_plan["entry_zone_max"])
+        stop_loss = float(trade_plan["stop_loss"])
+        t1 = float(trade_plan["target_1"])
+        t2 = float(trade_plan["target_2"])
+        t3 = float(trade_plan["target_3"])
 
         position_sizing = RiskManager.calculate_position_sizing(
             capital=capital,
@@ -178,25 +178,25 @@ class LiveDecisionEngine:
             stop_loss=stop_loss
         )
 
-        # 3. Lifecycle Status Evaluation based on manual current_price
+        # Lifecycle status against the MANUAL current price. This does not modify OHLCV.
         if current_price >= t3:
-            plan_status = "TARGETS_COMPLETED"
-            new_entry_allowed = False
+            live_plan_status = "TARGETS_COMPLETED"
+            live_new_entry_allowed = False
         elif current_price <= stop_loss:
-            plan_status = "INVALIDATED"
-            new_entry_allowed = False
+            live_plan_status = "INVALIDATED"
+            live_new_entry_allowed = False
         elif current_price >= t1:
-            plan_status = "IN_PROGRESS"
-            new_entry_allowed = False
+            live_plan_status = "IN_PROGRESS"
+            live_new_entry_allowed = False
         elif entry_min <= current_price <= entry_max:
-            plan_status = "ACTIVE"
-            new_entry_allowed = True
+            live_plan_status = "ACTIVE"
+            live_new_entry_allowed = True
         elif current_price < entry_min:
-            plan_status = "NOT_TRIGGERED"
-            new_entry_allowed = False
+            live_plan_status = "NOT_TRIGGERED"
+            live_new_entry_allowed = False
         else:
-            plan_status = "IN_PROGRESS"
-            new_entry_allowed = False
+            live_plan_status = "IN_PROGRESS"
+            live_new_entry_allowed = False
 
         # 4. Decision Evaluation Logic (Only reached when sessions_behind == 0)
         if not owns_stock:
@@ -206,8 +206,8 @@ class LiveDecisionEngine:
                 badge_color = "amber"
                 actionable_new_trade = False
                 reason_ar = (
-                    "السعر تجاوز جميع أهداف الخطة السابقة. لا تطارد السعر؛ "
-                    "انتظر تكوين فرصة دخول جديدة بعد تحديث التحليل."
+                    "السعر تجاوز جميع أهداف الخطة الحالية. لا تطارد السعر؛ "
+                    "انتظر إعادة حساب فرصة دخول جديدة من جلسة EOD مكتملة."
                 )
             elif current_price <= stop_loss:
                 decision = "DO_NOT_ENTER"
@@ -224,9 +224,9 @@ class LiveDecisionEngine:
                 badge_color = "green"
                 actionable_new_trade = True
                 reason_ar = (
-                    f"السعر اللحظي ({current_price:.2f} ج.م) متواجد داخل منطقة الدخول الآمنة المحددة "
-                    f"({entry_min:.2f} – {entry_max:.2f} ج.م)، ومستوى وقف الخسارة محدد ومحمي عند {stop_loss:.2f} ج.م، "
-                    f"مع عائد مستهدف 1:{trade_plan['target_1']:.2f} ج.م كهدف أول."
+                    f"السعر اللحظي ({current_price:.2f} ج.م) داخل منطقة الدخول الحالية "
+                    f"({entry_min:.2f} – {entry_max:.2f} ج.م). "
+                    f"وقف الخسارة {stop_loss:.2f} ج.م والهدف الأول {t1:.2f} ج.م."
                 )
             elif current_price > entry_max:
                 decision = "WAIT"
@@ -234,37 +234,68 @@ class LiveDecisionEngine:
                 badge_color = "amber"
                 actionable_new_trade = False
                 reason_ar = (
-                    f"السعر اللحظي ({current_price:.2f} ج.م) أعلى من الحد الأقصى لمنطقة الدخول ({entry_max:.2f} ج.م). "
-                    "لا تطارد السعر؛ انتظر جني أرباح مؤقت أو إعادة اختبار منطقة الدخول لتجنب الشراء في قمة فرعية."
+                    f"السعر اللحظي ({current_price:.2f} ج.م) أعلى من منطقة الدخول الحالية "
+                    f"({entry_min:.2f} – {entry_max:.2f} ج.م). "
+                    f"انتظر عودة السعر إلى المنطقة وفق شرط الخطة: {trade_plan.get('trigger_condition', 'إعادة اختبار منطقة الدخول')}."
                 )
             else:
-                # stop_loss < current_price < entry_min
                 decision = "NEAR_ENTRY"
                 decision_ar = "قريب من منطقة الدخول"
                 badge_color = "blue"
                 actionable_new_trade = False
                 reason_ar = (
-                    f"السعر اللحظي ({current_price:.2f} ج.م) أدنى قليلاً من بداية منطقة الدخول ({entry_min:.2f} ج.م) "
-                    f"لكنه أعلى من وقف الخسارة ({stop_loss:.2f} ج.م). انتظر إشارة ارتداد وتأكيد صعود داخل منطقة الدخول."
+                    f"السعر اللحظي ({current_price:.2f} ج.م) أسفل بداية منطقة الدخول ({entry_min:.2f} ج.م) "
+                    f"لكنه أعلى من وقف الخسارة ({stop_loss:.2f} ج.م). انتظر ارتدادًا وتأكيدًا داخل المنطقة."
                 )
+
+            response_plan_status = live_plan_status
+            response_new_entry_allowed = live_new_entry_allowed
+            trade_plan_output = dict(trade_plan)
+            trade_plan_output["plan_status"] = live_plan_status
+            trade_plan_output["new_entry_allowed"] = live_new_entry_allowed
         else:
             actionable_new_trade = False
-            if current_price <= stop_loss:
+
+            # If the EOD engine rolled an old completed setup into a fresh re-entry setup,
+            # an existing owner is still managed against the completed old target before
+            # any new-entry plan is considered.
+            previous_t3 = None
+            if previous_plan and previous_plan.get("target_3") is not None:
+                previous_t3 = float(previous_plan["target_3"])
+
+            if previous_t3 is not None and current_price >= previous_t3:
+                decision = "TAKE_PROFIT"
+                decision_ar = "جني أرباح"
+                badge_color = "green"
+                reason_ar = (
+                    f"المركز القائم تجاوز الهدف الثالث للخطة السابقة ({previous_t3:.2f} ج.م). "
+                    "الخطة الحالية المعروضة هي لإعادة دخول جديدة وليست مبررًا لإلغاء حماية أرباح المركز القديم."
+                )
+                response_plan_status = "TARGETS_COMPLETED"
+                response_new_entry_allowed = False
+                trade_plan_output = dict(trade_plan)
+            elif current_price <= stop_loss:
                 decision = "EXIT_STOP_LOSS"
                 decision_ar = "خروج"
                 badge_color = "red"
                 reason_ar = (
                     f"السعر اللحظي ({current_price:.2f} ج.م) كسر مستوى وقف الخسارة ({stop_loss:.2f} ج.م). "
-                    "يجب الخروج فوراً للحد من تفاقم الخسائر وحماية رأس المال."
+                    "يجب الخروج للحد من تفاقم الخسائر وحماية رأس المال."
                 )
+                response_plan_status = "INVALIDATED"
+                response_new_entry_allowed = False
+                trade_plan_output = dict(trade_plan)
             elif current_price >= t3:
                 decision = "TAKE_PROFIT"
                 decision_ar = "جني أرباح"
                 badge_color = "green"
                 reason_ar = (
-                    f"السعر اللحظي ({current_price:.2f} ج.م) تجاوز الهدف الثالث ({t3:.2f} ج.م) واكتملت أهداف الخطة السابقة. "
-                    "ينصح بتصفية كامل المركز أو تفعيل وقف ربح متقدم لحجز أقصى عائد."
+                    f"السعر اللحظي ({current_price:.2f} ج.م) تجاوز الهدف الثالث ({t3:.2f} ج.م). "
+                    "ينصح بحماية الأرباح أو التصفية وفق إدارة المركز."
                 )
+                response_plan_status = "TARGETS_COMPLETED"
+                response_new_entry_allowed = False
+                trade_plan_output = dict(trade_plan)
             elif current_price >= t2:
                 decision = "RAISE_STOP_LOSS"
                 decision_ar = "رفع وقف الخسارة"
@@ -273,26 +304,34 @@ class LiveDecisionEngine:
                     f"السعر اللحظي ({current_price:.2f} ج.م) تجاوز الهدف الثاني ({t2:.2f} ج.م). "
                     f"ينصح بتأمين الصفقة برفع وقف الخسارة إلى مستوى الهدف الأول ({t1:.2f} ج.م)."
                 )
+                response_plan_status = "IN_PROGRESS"
+                response_new_entry_allowed = False
+                trade_plan_output = dict(trade_plan)
             elif current_price >= t1:
                 decision = "TAKE_PARTIAL_PROFIT"
                 decision_ar = "جني جزء من الأرباح"
                 badge_color = "teal"
                 reason_ar = (
                     f"السعر اللحظي ({current_price:.2f} ج.م) بلغ الهدف الأول ({t1:.2f} ج.م). "
-                    "ينصح بجني جزء من الأرباح (نصف الكمية) ونقل أمر الوقف إلى سعر الشراء لتأمين الصفقة."
+                    "ينصح بجني جزء من الأرباح وتأمين المركز."
                 )
+                response_plan_status = "IN_PROGRESS"
+                response_new_entry_allowed = False
+                trade_plan_output = dict(trade_plan)
             else:
                 decision = "HOLD"
                 decision_ar = "احتفاظ"
                 badge_color = "emerald"
                 reason_ar = (
-                    f"السعر اللحظي ({current_price:.2f} ج.م) يسير بشكل طبيعي أعلى من وقف الخسارة ({stop_loss:.2f} ج.م) "
-                    f"وفي طريقه نحو الهدف الأول ({t1:.2f} ج.م). استمر في الاحتفاظ بالمركز."
+                    f"السعر اللحظي ({current_price:.2f} ج.م) أعلى من وقف الخسارة ({stop_loss:.2f} ج.م) "
+                    f"ودون الهدف الأول ({t1:.2f} ج.م). استمر في إدارة المركز وفق الخطة."
                 )
+                response_plan_status = live_plan_status
+                response_new_entry_allowed = False
+                trade_plan_output = dict(trade_plan)
 
-        trade_plan_output = dict(trade_plan)
-        trade_plan_output["plan_status"] = plan_status
-        trade_plan_output["new_entry_allowed"] = new_entry_allowed
+            # Owner mode never turns a re-entry setup into an actionable NEW trade.
+            trade_plan_output["new_entry_allowed"] = False
 
         return {
             "ticker": ticker,
@@ -302,8 +341,8 @@ class LiveDecisionEngine:
             "badge_color": badge_color,
             "actionable_new_trade": actionable_new_trade,
             "current_analysis_eligible": True,
-            "plan_status": plan_status,
-            "new_entry_allowed": new_entry_allowed,
+            "plan_status": response_plan_status,
+            "new_entry_allowed": response_new_entry_allowed,
             "reason_ar": reason_ar,
             "owns_stock": owns_stock,
             "buy_price": buy_price if owns_stock else None,
@@ -314,7 +353,7 @@ class LiveDecisionEngine:
             "sessions_behind": 0,
             "freshness_ar": freshness_ar,
             "actual_provider": actual_provider,
-            "analytical_bars_count": len(analytical_bars) if analytical_bars else 0,
+            "analytical_bars_count": bars_count,
             "status": "VALID",
             "trade_plan": trade_plan_output,
             "previous_plan": previous_plan,

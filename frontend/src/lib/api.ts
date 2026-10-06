@@ -1,6 +1,23 @@
-import { StockListResponse, Stock, ChartData, LiveAnalysisResult, MarketStatus, CompanyProfile } from "./types";
+import { StockListResponse, Stock, ChartData, LiveAnalysisResult, MarketStatus, CompanyProfile, StockPlan, StockPlansResponse } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+
+export async function getAllStockPlans(signal?: AbortSignal): Promise<StockPlansResponse> {
+  const res = await fetch(`${API_BASE}/egx/plans`, { cache: "no-store", signal });
+  if (!res.ok) throw new Error("تعذر تحميل خطط الأسهم. تأكد من تشغيل الباك إند وأعد المحاولة.");
+  return res.json();
+}
+
+export async function refreshStockPlan(ticker: string, signal?: AbortSignal): Promise<StockPlan> {
+  const res = await fetch(`${API_BASE}/egx/plans/${encodeURIComponent(ticker)}/refresh`, {
+    method: "POST", cache: "no-store", signal,
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.detail || `تعذر تحديث خطة ${ticker}`);
+  }
+  return res.json();
+}
 
 export async function getMarketStatus(): Promise<MarketStatus> {
   const res = await fetch(`${API_BASE}/egx/market/status`, { cache: "no-store" });
@@ -58,6 +75,33 @@ export async function getStockChart(ticker: string, range: string = "3M"): Promi
   return res.json();
 }
 
+export async function submitManualEod(data: {
+  ticker: string;
+  session_date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}): Promise<{
+  status: string;
+  ticker: string;
+  session_date: string;
+  actual_provider: string;
+  message_ar: string;
+}> {
+  const res = await fetch(`${API_BASE}/egx/live-analysis/manual-eod`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || "تعذر حفظ بيانات الجلسة المكتملة");
+  }
+  return res.json();
+}
+
 export async function postLiveAnalysis(data: {
   ticker: string;
   current_price: number;
@@ -65,6 +109,8 @@ export async function postLiveAnalysis(data: {
   owns_stock?: boolean;
   buy_price?: number;
   shares_owned?: number;
+  bid_depth_qty?: number;
+  ask_depth_qty?: number;
 }): Promise<LiveAnalysisResult> {
   const res = await fetch(`${API_BASE}/egx/live-analysis`, {
     method: "POST",

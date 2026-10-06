@@ -1921,6 +1921,17 @@
       "indices": [],
       "source": "https://www.egx.com.eg/ar/CompanyDetails.aspx?ISIN=EGS3C371C019",
       "source_updated_at": "2026-10-06T03:31:11+03:00"
+    },
+    {
+      "ticker": "MPCI",
+      "arabic_name": "ممفيس للأدوية والصناعات الكيماوية",
+      "english_name": "Memphis Pharmaceuticals & Chemical Industries",
+      "isin": "EGS38351C010",
+      "sector": "الرعاية الصحية والأدوية",
+      "listing_status": "ACTIVE",
+      "indices": [],
+      "source": "https://www.investing.com/equities/memphis-pharmaceuticals",
+      "source_updated_at": "2026-10-06T01:06:39.895647+00:00"
     }
   ]
 }
