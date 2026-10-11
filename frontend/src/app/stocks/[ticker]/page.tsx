@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -15,10 +15,11 @@ import {
   Database,
   RefreshCw
 } from "lucide-react";
-import { getStockDetail, getStockChart, refreshStockData } from "@/lib/api";
-import { Stock, ChartData } from "@/lib/types";
+import { getStockDetail, getStockChart, refreshStockData, getStockTechnical } from "@/lib/api";
+import { Stock, ChartData, StockPlan } from "@/lib/types";
 import InteractiveCandleChart from "@/components/InteractiveCandleChart";
 import CompanyProfileCard from "@/components/CompanyProfileCard";
+import TechnicalSummaryCard from "@/components/TechnicalSummaryCard";
 
 export default function StockDetailPage() {
   const params = useParams();
@@ -32,48 +33,84 @@ export default function StockDetailPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [companyRefreshKey, setCompanyRefreshKey] = useState(0);
+  const [report, setReport] = useState<StockPlan | null>(null);
+  const [reportLoading, setReportLoading] = useState(true);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const refreshController = useRef<AbortController | null>(null);
 
   const handleRefresh = async () => {
     if (!ticker || refreshing) return;
+    const controller = new AbortController();
+    refreshController.current = controller;
     setRefreshing(true);
+    setReportLoading(true);
+    setReportError(null);
     try {
-      const updatedStock = await refreshStockData(ticker);
+      const updatedStock = await refreshStockData(ticker, controller.signal);
+      if (controller.signal.aborted) return;
       setStock(updatedStock);
-      const updatedChart = await getStockChart(ticker, range);
-      setChartData(updatedChart);
+      const results = await Promise.allSettled([getStockChart(ticker, range, controller.signal), getStockTechnical(ticker, controller.signal)]);
+      if (controller.signal.aborted) return;
+      if (results[0].status === "fulfilled") { setChartData(results[0].value); setChartError(null); }
+      else { setChartData(null); setChartError(results[0].reason.message); }
+      if (results[1].status === "fulfilled") setReport(results[1].value);
+      else { setReport(null); setReportError(results[1].reason.message); }
     } catch (err: any) {
-      console.error("Failed to refresh stock data:", err);
+      if (controller.signal.aborted) return;
+      setReport(null);
+      setReportError(err.message || "تعذر تحديث البيانات");
     } finally {
-      setCompanyRefreshKey((value) => value + 1);
-      setRefreshing(false);
+      if (!controller.signal.aborted) {
+        setCompanyRefreshKey((value) => value + 1);
+        setRefreshing(false);
+        setReportLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     if (!ticker) return;
     setLoading(true);
+    setRefreshing(false);
     setError(null);
-
-    getStockDetail(ticker)
+    setStock(null);
+    setReport(null);
+    setReportLoading(true);
+    setReportError(null);
+    const controller = new AbortController();
+    getStockDetail(ticker, controller.signal)
       .then((s) => {
+        if (controller.signal.aborted) return;
         setStock(s);
         setLoading(false);
+        return getStockTechnical(ticker, controller.signal)
+          .then(data => { if (!controller.signal.aborted) setReport(data); })
+          .catch(err => { if (!controller.signal.aborted) setReportError(err.message); })
+          .finally(() => { if (!controller.signal.aborted) setReportLoading(false); });
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         setError(err.message || "تعذر جلب بيانات السهم");
         setLoading(false);
       });
+    return () => { controller.abort(); refreshController.current?.abort(); };
   }, [ticker]);
 
   useEffect(() => {
     if (!ticker) return;
     setChartLoading(true);
-    getStockChart(ticker, range)
+    setChartData(null);
+    setChartError(null);
+    const controller = new AbortController();
+    getStockChart(ticker, range, controller.signal)
       .then((c) => {
+        if (controller.signal.aborted) return;
         setChartData(c);
         setChartLoading(false);
       })
-      .catch(() => setChartLoading(false));
+      .catch(err => { if (!controller.signal.aborted) { setChartError(err.message); setChartLoading(false); } });
+    return () => controller.abort();
   }, [ticker, range]);
 
   if (loading) {
@@ -153,14 +190,16 @@ export default function StockDetailPage() {
         <div className="bg-surface border border-surfaceBorder rounded-xl p-4">
           <span className="text-xs text-gray-400 block mb-1">آخر إغلاق مسجل</span>
           <span className="text-xl font-black text-white font-mono num-ltr">
-            {stock.latest_close ? `${stock.latest_close.toFixed(2)} ج.م` : "—"}
+            {(report?.latest_close ?? chartData?.latest_close ?? stock.latest_close)?.toFixed(2) ?? "—"} ج.م
           </span>
+          {report?.technical_rating && <p className={`text-xs font-mono mt-1 ${report.technical_rating.daily_change >= 0 ? "text-emerald-400" : "text-rose-400"}`} dir="ltr">{report.technical_rating.daily_change >= 0 ? "+" : ""}{report.technical_rating.daily_change.toFixed(2)} ({report.technical_rating.daily_change_pct.toFixed(2)}%)</p>}
+          {report?.technical_rating && <p className="text-[10px] text-gray-500 mt-1">عن إغلاق {report.technical_rating.daily_reference_session}</p>}
         </div>
 
         <div className="bg-surface border border-surfaceBorder rounded-xl p-4">
           <span className="text-xs text-gray-400 block mb-1">آخر جلسة EOD</span>
           <span className="text-sm font-bold text-white font-mono num-ltr">
-            {stock.latest_session_date || chartData?.latest_available_session || "—"}
+            {report?.latest_available_session || chartData?.latest_available_session || stock.latest_session_date || "—"}
           </span>
         </div>
 
@@ -175,7 +214,7 @@ export default function StockDetailPage() {
             ) : (
               <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-400">
                 <Clock className="w-4 h-4" />
-                <span>غير محدث ({stock.sessions_behind ?? chartData?.sessions_behind ?? 1} جلسة تأخير)</span>
+                <span>{(chartData?.sessions_behind ?? stock.sessions_behind) == null ? "لا توجد بيانات كافية" : `غير محدث (${chartData?.sessions_behind ?? stock.sessions_behind} جلسة تأخير)`}</span>
               </span>
             )}
           </div>
@@ -195,13 +234,17 @@ export default function StockDetailPage() {
           bars={chartData.bars}
           selectedRange={range}
           onRangeChange={setRange}
-          loading={chartLoading}
+          loading={chartLoading || refreshing}
+          rangeInfo={chartData}
+          tradePlan={report?.latest_available_session === chartData.latest_available_session && report?.sessions_behind === 0 ? report.trade_plan : null}
         />
       ) : (
         <div className="bg-surface border border-surfaceBorder rounded-2xl p-12 text-center text-gray-400 text-sm">
-          البيانات التاريخية غير متاحة حالياً لهذا السهم من المزودين المعتمدين.
+          {chartLoading ? "جاري تحميل الشارت..." : chartError || "البيانات التاريخية غير متاحة حالياً لهذا السهم من المزودين المعتمدين."}
         </div>
       )}
+
+      <TechnicalSummaryCard report={report} loading={reportLoading} error={reportError} />
 
       {/* Technical Metadata & Provenance Footer */}
       {["MBSC", "MPCI", "BIOC"].includes(stock.ticker) && <CompanyProfileCard ticker={stock.ticker}

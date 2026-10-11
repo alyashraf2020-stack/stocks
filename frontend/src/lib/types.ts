@@ -61,6 +61,43 @@ export interface StockPlan {
   pullback_status_ar?: string | null;
   trade_plan?: TradePlan | null;
   breakout_entry?: BreakoutEntry | null;
+  technical_rating?: TechnicalRating | null;
+  plan_metrics?: PlanMetrics | null;
+  missing_sessions_count?: number;
+}
+
+export interface TechnicalRating {
+  methodology: string;
+  status: "COMPLETE" | "PARTIAL";
+  as_of_session: string;
+  is_current: boolean;
+  score: number;
+  signal: string;
+  signal_ar: string;
+  available_count: number;
+  total_count: number;
+  coverage_pct: number;
+  agreement_pct: number;
+  counts: Record<string, number>;
+  trend_score: number;
+  momentum_score: number;
+  daily_change: number;
+  daily_change_pct: number;
+  daily_reference_session: string;
+  atr_pct: number;
+  volatility_ar: string;
+  mean_volume_20: number;
+  relative_volume?: number | null;
+  indicators: { key: string; group: string; value: number | null; vote: number | null; signal: string; rule_ar: string }[];
+  note_ar: string;
+}
+
+export interface PlanMetrics {
+  reference_entry: number;
+  risk_per_share: number;
+  risk_pct: number;
+  target_gain_pct: number[];
+  reward_risk: number[];
 }
 
 export interface StockPlansResponse {
@@ -104,6 +141,11 @@ export interface ChartData {
   freshness_ar: string;
   actual_provider?: string | null;
   bars: CandleBar[];
+  range_change_pct?: number | null;
+  range_start_session?: string | null;
+  range_end_session?: string | null;
+  range_complete?: boolean;
+  change_reference_session?: string | null;
 }
 
 export interface TradePlan {

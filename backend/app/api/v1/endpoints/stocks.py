@@ -17,6 +17,8 @@ from app.services.egx_calendar import (
 )
 from app.models.candle import EGXCandle
 from app.services.company_profile import get_mbsc_company_profile, get_mpci_company_profile, get_bioc_company_profile
+from app.schemas.stock_plans import StockPlanResponse
+from app.services.stock_plans import StockPlansService, completed_analytical_bars
 
 router = APIRouter()
 
@@ -152,11 +154,14 @@ def get_stock_chart(
         raise HTTPException(status_code=404, detail=f"سهم {ticker} غير مدرج في البورصة المصرية")
 
     data_res = default_provider_manager.get_analytical_bars(sec.ticker, limit=250, db=db)
-    if data_res["status"] == "DATA_UNAVAILABLE" or not data_res["bars"]:
+    expected = get_expected_latest_completed_session()
+    bars = completed_analytical_bars(data_res.get("bars", []), expected, sec.ticker)
+    if not bars:
         raise HTTPException(status_code=404, detail="البيانات التاريخية غير متاحة لهذا السهم حالياً")
 
     # Calculate indicators on full history BEFORE slicing
-    enriched_full = TechnicalIndicatorEngine.compute_all_indicators(data_res["bars"])
+    enriched_full = TechnicalIndicatorEngine.compute_all_indicators(bars)
+    behind = calculate_sessions_behind(datetime.date.fromisoformat(bars[-1]["session_date"]))
 
     range_map = {
         "1W": 5,
@@ -167,20 +172,36 @@ def get_stock_chart(
     }
     slice_count = range_map.get(range, 65)
     sliced_bars = enriched_full[-slice_count:] if len(enriched_full) > slice_count else enriched_full
+    anchor_index = max(0, len(enriched_full) - slice_count - 1)
+    anchor = enriched_full[anchor_index]
 
     return {
         "ticker": sec.ticker,
         "range_selected": range,
         "total_bars": len(sliced_bars),
-        "expected_latest_session": data_res["expected_latest_session"],
-        "latest_available_session": data_res["latest_session"],
+        "expected_latest_session": expected.isoformat(),
+        "latest_available_session": bars[-1]["session_date"],
         "latest_close": sliced_bars[-1]["close"] if sliced_bars else None,
-        "sessions_behind": data_res["sessions_behind"],
-        "freshness": data_res["freshness"],
-        "freshness_ar": data_res.get("freshness_ar", "غير محدث"),
-        "actual_provider": data_res.get("actual_provider"),
-        "bars": sliced_bars
+        "sessions_behind": behind,
+        "freshness": get_freshness_label(behind),
+        "freshness_ar": get_freshness_display_ar(behind),
+        "actual_provider": bars[-1].get("actual_provider"),
+        "bars": sliced_bars,
+        "range_change_pct": round(100 * (sliced_bars[-1]["close"] / anchor["close"] - 1), 4),
+        "range_start_session": sliced_bars[0]["session_date"],
+        "range_end_session": sliced_bars[-1]["session_date"],
+        "range_complete": len(enriched_full) >= slice_count + 1,
+        "change_reference_session": anchor["session_date"],
     }
+
+
+@router.get("/{ticker}/technical", response_model=StockPlanResponse)
+def get_stock_technical_report(ticker: str, db: Session = Depends(get_db)):
+    sec = SecurityMasterService.get_by_ticker(db, ticker)
+    if not sec:
+        raise HTTPException(status_code=404, detail="السهم غير موجود في دليل البورصة المصرية")
+    # One cache snapshot for rating and plan; the existing explicit refresh fetches data.
+    return StockPlansService.build(db, sec)
 
 
 @router.get("/{ticker}/company")

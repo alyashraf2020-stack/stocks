@@ -67,6 +67,9 @@ def seed_security_master(db: Session) -> int:
         db.add(sec)
         existing_tickers.add(ticker)
 
+    # Runtime sessions disable autoflush; make new identities visible before db.get.
+    # This stays inside the same transaction as the correction and archive.
+    db.flush()
     bioc = next((item for item in data.get("equities", []) if item["ticker"] == "BIOC"), None)
     if bioc:
         _correct_bioc_identity(db, bioc, bioc_previously_existed)

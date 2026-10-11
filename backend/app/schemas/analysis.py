@@ -34,6 +34,11 @@ class ChartResponse(BaseModel):
     freshness_ar: str
     actual_provider: Optional[str] = None
     bars: List[CandleBarResponse]
+    range_change_pct: Optional[float] = None
+    range_start_session: Optional[str] = None
+    range_end_session: Optional[str] = None
+    range_complete: bool = False
+    change_reference_session: Optional[str] = None
 
 class TradePlanResponse(BaseModel):
     entry_zone_min: Optional[float] = None

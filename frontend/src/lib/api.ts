@@ -48,8 +48,8 @@ export async function getSectors(): Promise<string[]> {
   return res.json();
 }
 
-export async function getStockDetail(ticker: string): Promise<Stock> {
-  const res = await fetch(`${API_BASE}/egx/stocks/${ticker}`, { cache: "no-store" });
+export async function getStockDetail(ticker: string, signal?: AbortSignal): Promise<Stock> {
+  const res = await fetch(`${API_BASE}/egx/stocks/${encodeURIComponent(ticker)}`, { cache: "no-store", signal });
   if (!res.ok) throw new Error(`تعذر جلب بيانات السهم ${ticker}`);
   return res.json();
 }
@@ -60,17 +60,24 @@ export async function getStockCompany(ticker: string): Promise<CompanyProfile> {
   return res.json();
 }
 
-export async function refreshStockData(ticker: string): Promise<Stock> {
-  const res = await fetch(`${API_BASE}/egx/stocks/${ticker}/refresh`, {
+export async function refreshStockData(ticker: string, signal?: AbortSignal): Promise<Stock> {
+  const res = await fetch(`${API_BASE}/egx/stocks/${encodeURIComponent(ticker)}/refresh`, {
     method: "POST",
     cache: "no-store",
+    signal,
   });
   if (!res.ok) throw new Error(`تعذر تحديث بيانات السهم ${ticker}`);
   return res.json();
 }
 
-export async function getStockChart(ticker: string, range: string = "3M"): Promise<ChartData> {
-  const res = await fetch(`${API_BASE}/egx/stocks/${ticker}/chart?range=${range}`, { cache: "no-store" });
+export async function getStockTechnical(ticker: string, signal?: AbortSignal): Promise<StockPlan> {
+  const res = await fetch(`${API_BASE}/egx/stocks/${encodeURIComponent(ticker)}/technical`, { cache: "no-store", signal });
+  if (!res.ok) throw new Error("تعذر تحميل التقييم الفني. أعد المحاولة من تحديث البيانات.");
+  return res.json();
+}
+
+export async function getStockChart(ticker: string, range: string = "3M", signal?: AbortSignal): Promise<ChartData> {
+  const res = await fetch(`${API_BASE}/egx/stocks/${encodeURIComponent(ticker)}/chart?range=${range}`, { cache: "no-store", signal });
   if (!res.ok) throw new Error(`تعذر جلب الرسم البياني للسهم ${ticker}`);
   return res.json();
 }

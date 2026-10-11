@@ -2,6 +2,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from app.schemas.analysis import TradePlanResponse
 from app.schemas.live_analysis import BreakoutEntryResponse
+from app.schemas.technical_rating import TechnicalRatingResponse, PlanMetricsResponse
 
 
 class StockPlanResponse(BaseModel):
@@ -24,6 +25,9 @@ class StockPlanResponse(BaseModel):
     pullback_status_ar: Optional[str] = None
     trade_plan: Optional[TradePlanResponse] = None
     breakout_entry: Optional[BreakoutEntryResponse] = None
+    technical_rating: Optional[TechnicalRatingResponse] = None
+    plan_metrics: Optional[PlanMetricsResponse] = None
+    missing_sessions_count: int = 0
 
 
 class StockPlansResponse(BaseModel):

@@ -1932,6 +1932,17 @@
       "indices": [],
       "source": "https://www.investing.com/equities/memphis-pharmaceuticals",
       "source_updated_at": "2026-10-06T01:06:39.895647+00:00"
+    },
+    {
+      "ticker": "RUBX",
+      "arabic_name": "روبكس العالمية لتصنيع البلاستيك والأكريلك",
+      "english_name": "Rubex International for Plastic and Acrylic Manufacturing",
+      "isin": "EGS3A221C018",
+      "sector": "الموارد الأساسية",
+      "listing_status": "ACTIVE",
+      "indices": [],
+      "source": "https://www.investing.com/equities/rubex-plastic",
+      "source_updated_at": "2026-10-11T23:30:00+00:00"
     }
   ]
 }

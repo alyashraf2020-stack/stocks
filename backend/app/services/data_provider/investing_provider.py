@@ -6,6 +6,8 @@ import re
 import time
 from typing import List, Dict, Any, Optional, Iterable
 from urllib.parse import quote_plus, urlparse
+from pathlib import Path
+from functools import lru_cache
 
 from app.services.data_provider.base import BaseHistoricalProvider
 
@@ -39,6 +41,37 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
 
     _resolved_cache: Dict[str, int] = {}
     _resolved_url_cache: Dict[str, str] = {}
+    _egypt_metadata_cache: Dict[str, Dict[str, Any]] = {}
+    _egypt_cache_at: float = -1e9
+
+    @classmethod
+    def _load_egypt_directory(cls):
+        # Public country screener supplies exact symbols/IDs/URLs. Prices from
+        # this directory are deliberately discarded; each chart is verified anew.
+        ttl = 21600 if cls._egypt_metadata_cache else 60
+        if time.monotonic() - cls._egypt_cache_at < ttl:
+            return cls._egypt_metadata_cache
+        cls._egypt_cache_at = time.monotonic()
+        try:
+            from curl_cffi import requests
+            response = requests.get("https://sa.investing.com/equities/egypt", impersonate="chrome124", timeout=20)
+            response.raise_for_status()
+            match = re.search(r'<script\b(?=[^>]*\bid="__NEXT_DATA__")[^>]*>(.*?)</script>', response.text, re.DOTALL)
+            state = json.loads(match.group(1))["props"]["pageProps"]["state"]
+            entries = {}
+            for item in cls._walk_dicts(state):
+                if (item.get("flagCode") != "EG" or item.get("exchangeId") != 33 or
+                        item.get("pairType") != "Equities" or item.get("isCFD") is True):
+                    continue
+                symbol = str(item.get("symbol", "")).strip().upper()
+                instrument_id, url = cls._instrument_id(item), cls._candidate_url(item)
+                if symbol and instrument_id and url and urlparse(url).path.startswith("/equities/"):
+                    entries[symbol] = {"id": instrument_id, "url": url}
+            if entries:
+                cls._egypt_metadata_cache = entries
+        except Exception:
+            pass
+        return cls._egypt_metadata_cache
 
     @property
     def provider_name(self) -> str:
@@ -165,10 +198,16 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
 
         if clean_ticker in INVESTING_INSTRUMENT_MAP:
             self._resolved_cache[clean_ticker] = INVESTING_INSTRUMENT_MAP[clean_ticker]
-            page_url = INVESTING_PAGE_MAP.get(clean_ticker)
+            page_url = INVESTING_PAGE_MAP.get(clean_ticker) or self._resolved_url_cache.get(clean_ticker)
             if page_url:
                 self._resolved_url_cache[clean_ticker] = page_url
-            return {"id": INVESTING_INSTRUMENT_MAP[clean_ticker], "url": page_url}
+                return {"id": INVESTING_INSTRUMENT_MAP[clean_ticker], "url": page_url}
+
+        meta = self._load_egypt_directory().get(clean_ticker)
+        if meta and (clean_ticker not in INVESTING_INSTRUMENT_MAP or meta["id"] == INVESTING_INSTRUMENT_MAP[clean_ticker]):
+            self._resolved_cache[clean_ticker] = meta["id"]
+            self._resolved_url_cache[clean_ticker] = meta["url"]
+            return dict(meta)
 
         queries: List[str] = [clean_ticker]
         if english_name:
@@ -179,10 +218,12 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
         try:
             from curl_cffi import requests
             session = requests.Session(impersonate="chrome124")
+            # Search uses the same anonymous public website request context.
+            headers = self._bioc_chart_headers() or self._headers()
             for query in queries:
                 url = f"https://api.investing.com/api/search/v2/search?q={quote_plus(query)}"
                 try:
-                    response = session.get(url, headers=self._headers(), timeout=15)
+                    response = session.get(url, headers=headers, timeout=15)
                     if response.status_code != 200:
                         continue
                     payload = response.json()
@@ -192,6 +233,8 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
                 for item in self._walk_dicts(payload):
                     instrument_id = self._instrument_id(item)
                     if instrument_id is None:
+                        continue
+                    if clean_ticker in INVESTING_INSTRUMENT_MAP and instrument_id != INVESTING_INSTRUMENT_MAP[clean_ticker]:
                         continue
                     score = self._score_candidate(item, clean_ticker, english_name)
                     if score > best_score:
@@ -305,27 +348,44 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
         return self.fetch_historical_bars_for_security(ticker=ticker, english_name=None, limit=limit)
 
     def _bioc_chart_headers(self) -> Optional[Dict[str, str]]:
+        from app.services.company_profile import BIOC_ISIN
+        return self._verified_page_chart_headers("BIOC", 12975, INVESTING_PAGE_MAP["BIOC"], BIOC_ISIN)
+
+    @staticmethod
+    @lru_cache(maxsize=1)
+    def _canonical_isins():
+        path = Path(__file__).resolve().parents[3] / "data" / "egx_equities.json"
+        with path.open(encoding="utf-8-sig") as stream:
+            return {row["ticker"]: row.get("isin") for row in json.load(stream)["equities"]}
+
+    def _verified_page_chart_headers(self, ticker, instrument_id, page_url, isin) -> Optional[Dict[str, str]]:
         """Use the anonymous request context supplied by the public EGX page.
 
         The website's chart client sends its edition and public page token.
         Neither this context nor the token is persisted or logged.
         """
-        from app.services.company_profile import parse_snapshot, BIOC_ISIN
+        from app.services.company_profile import parse_snapshot
         from curl_cffi import requests
 
+        parsed = urlparse(page_url or "")
+        if (not isin or parsed.scheme != "https" or
+                not (parsed.hostname == "investing.com" or (parsed.hostname or "").endswith(".investing.com")) or
+                not parsed.path.startswith("/equities/")):
+            return None
+        history_path = parsed.path if parsed.path.endswith("-historical-data") else parsed.path.rstrip("/") + "-historical-data"
         for edition in ("sa", "za"):
             try:
-                page_url = f"https://{edition}.investing.com/equities/glaxo-egypt-historical-data"
+                page_url = f"https://{edition}.investing.com{history_path}"
                 with requests.Session(impersonate="chrome124") as session:
                     response = session.get(page_url, timeout=15)
                     response.raise_for_status()
-                parse_snapshot(response.text, ticker="BIOC", isin=BIOC_ISIN)
+                parse_snapshot(response.text, ticker=ticker, isin=isin)
                 match = re.search(r'<script\b(?=[^>]*\bid="__NEXT_DATA__")[^>]*>(.*?)</script>', response.text, re.DOTALL)
                 props = json.loads(match.group(1))["props"]["pageProps"]
                 instrument = props["state"]["equityStore"]["instrument"]
                 token = props.get("accessToken")
                 if (instrument["underlying"]["market"] != "Egypt"
-                        or str(instrument["base"]["id"]) != "12975"
+                        or str(instrument["base"]["id"]) != str(instrument_id)
                         or props.get("subdomain") != edition
                         or not isinstance(token, str) or not token):
                     continue
@@ -338,7 +398,11 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
         return None
 
     def _fetch_chart(self, clean_ticker: str, instrument_id: int, limit: int) -> List[Dict[str, Any]]:
-        headers = self._bioc_chart_headers() if clean_ticker == "BIOC" else self._headers()
+        headers = self._bioc_chart_headers() if clean_ticker == "BIOC" else self._verified_page_chart_headers(
+            clean_ticker, instrument_id,
+            self._resolved_url_cache.get(clean_ticker) or INVESTING_PAGE_MAP.get(clean_ticker),
+            self._canonical_isins().get(clean_ticker),
+        )
         if headers is None:
             return []
         allowed_points = [60, 70, 90, 110, 120, 140, 160]
@@ -559,9 +623,10 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
 
 
 # Extend verified mappings separately to keep previously resolved merge blocks stable.
-INVESTING_INSTRUMENT_MAP.update({"MPCI": 40612, "BIOC": 12975})
+INVESTING_INSTRUMENT_MAP.update({"MPCI": 40612, "BIOC": 12975, "RUBX": 12950})
 INVESTING_PAGE_MAP: Dict[str, str] = {
     "MBSC": "https://www.investing.com/equities/misr-beni-suef-cement",
     "MPCI": "https://www.investing.com/equities/memphis-pharmaceuticals",
     "BIOC": "https://www.investing.com/equities/glaxo-egypt",
+    "RUBX": "https://www.investing.com/equities/rubex-plastic",
 }

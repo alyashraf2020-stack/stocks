@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { CandleBar } from "@/lib/types";
+import { CandleBar, ChartData, TradePlan } from "@/lib/types";
 
 interface InteractiveCandleChartProps {
   bars: CandleBar[];
   selectedRange: string;
   onRangeChange: (range: string) => void;
   loading?: boolean;
+  rangeInfo?: ChartData;
+  tradePlan?: TradePlan | null;
 }
 
 export default function InteractiveCandleChart({
@@ -15,11 +17,20 @@ export default function InteractiveCandleChart({
   selectedRange,
   onRangeChange,
   loading = false,
+  rangeInfo,
+  tradePlan,
 }: InteractiveCandleChartProps) {
   // Indicator Toggles
   const [showSMA20, setShowSMA20] = useState(true);
   const [showSMA50, setShowSMA50] = useState(true);
   const [showBB, setShowBB] = useState(false);
+  const [view, setView] = useState<"LINE" | "CANDLE">("LINE");
+  const [showLevels, setShowLevels] = useState(true);
+  const levels = useMemo(() => !showLevels || !tradePlan ? [] : [
+    { label: "هدف 1", value: tradePlan.target_1, color: "#34D399" },
+    { label: "وقف", value: tradePlan.stop_loss, color: "#FB7185" },
+    { label: "دخول", value: tradePlan.planning_entry, color: "#38BDF8" },
+  ].filter((item): item is { label: string; value: number; color: string } => item.value != null && Number.isFinite(item.value)), [showLevels, tradePlan]);
   const [subPane, setSubPane] = useState<"RSI" | "MACD" | "ATR" | "NONE">("RSI");
 
   // Hover state for tooltip & synchronized crosshair
@@ -56,6 +67,7 @@ export default function InteractiveCandleChart({
       if (showBB && b.bb_lower && b.bb_lower < min) min = b.bb_lower;
       if (showBB && b.bb_upper && b.bb_upper > max) max = b.bb_upper;
     });
+    levels.forEach(level => { min = Math.min(min, level.value); max = Math.max(max, level.value); });
 
     const priceBuffer = (max - min) * 0.05 || 1.0;
     const bWidth =
@@ -68,7 +80,7 @@ export default function InteractiveCandleChart({
       maxPrice: max + priceBuffer,
       barWidth: bWidth,
     };
-  }, [bars, showSMA20, showSMA50, showBB, slotWidth]);
+  }, [bars, showSMA20, showSMA50, showBB, slotWidth, levels]);
 
   // Coordinate projection helpers
   const getX = (index: number) => {
@@ -88,7 +100,13 @@ export default function InteractiveCandleChart({
     return subTop + subInnerHeight * (1 - ratio);
   };
 
-  const hoveredBar = hoverIndex !== null && bars[hoverIndex] ? bars[hoverIndex] : bars[bars.length - 1];
+  const safeHover = hoverIndex !== null && bars[hoverIndex] ? hoverIndex : null;
+  const hoveredBar = safeHover !== null ? bars[safeHover] : bars[bars.length - 1];
+  const macdDomain = useMemo(() => {
+    const values = bars.map(bar => bar.macd_hist).filter((v): v is number => v != null && Number.isFinite(v));
+    const extent = Math.max(...values.map(Math.abs), 0.0001) * 1.1;
+    return { min: -extent, max: extent };
+  }, [bars]);
 
   // Helper paths for line overlays
   const createLinePath = (getter: (b: CandleBar) => number | null | undefined) => {
@@ -113,6 +131,16 @@ export default function InteractiveCandleChart({
 
   return (
     <div className="bg-surface border border-surfaceBorder rounded-2xl p-4 sm:p-6 space-y-4">
+      <div className="flex justify-between gap-3 flex-wrap items-center">
+        <div className="text-sm text-gray-300">تغير {selectedRange}: <strong className={(rangeInfo?.range_change_pct ?? 0) >= 0 ? "text-emerald-400 font-mono" : "text-rose-400 font-mono"} dir="ltr">{rangeInfo?.range_change_pct == null ? "—" : `${rangeInfo.range_change_pct > 0 ? "+" : ""}${rangeInfo.range_change_pct.toFixed(2)}%`}</strong>
+          {rangeInfo && <p className="text-xs text-gray-500 mt-1">{rangeInfo.range_start_session} — {rangeInfo.range_end_session} · {bars.length} جلسة {rangeInfo.range_complete ? "" : "· فترة جزئية حسب التاريخ المتاح"}</p>}
+          {rangeInfo?.change_reference_session && <p className="text-[10px] text-gray-500 mt-1">التغير من إغلاق {rangeInfo.change_reference_session}؛ اختيار فترة العرض لا يغيّر تقييم آخر جلسة.</p>}
+        </div>
+        <div className="flex gap-2 text-xs">
+          {(["LINE", "CANDLE"] as const).map(mode => <button type="button" key={mode} onClick={() => setView(mode)} aria-pressed={view === mode} className={`px-3 py-2 rounded-lg border ${view === mode ? "border-primary text-primary" : "border-surfaceBorder text-gray-400"}`}>{mode === "LINE" ? "خط سعري" : "شموع"}</button>)}
+          {tradePlan && <button type="button" aria-pressed={showLevels} onClick={() => setShowLevels(!showLevels)} className="px-3 py-2 rounded-lg border border-surfaceBorder text-gray-300">{showLevels ? "إخفاء الخطة" : "إظهار الخطة"}</button>}
+        </div>
+      </div>
       {/* Top Header: Indicator Controls & Range Selector */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-surfaceBorder pb-4">
         {/* Indicators Toolbar */}
@@ -182,6 +210,7 @@ export default function InteractiveCandleChart({
               key={r}
               type="button"
               onClick={() => onRangeChange(r)}
+              disabled={loading}
               className={`px-3 py-1 rounded text-xs font-bold font-mono transition-all ${
                 selectedRange === r
                   ? "bg-primary text-background shadow"
@@ -321,6 +350,7 @@ export default function InteractiveCandleChart({
           )}
 
           {/* Candlesticks Rendering */}
+          {view === "LINE" && <path d={createLinePath(bar => bar.close)} fill="none" stroke="#34D399" strokeWidth="2.5" />}
           {bars.map((bar, idx) => {
             const x = getX(idx);
             const isUp = bar.close >= bar.open;
@@ -350,7 +380,7 @@ export default function InteractiveCandleChart({
                   className="pointer-events-auto"
                 />
                 {/* Wick */}
-                <line
+                {view === "CANDLE" && <><line
                   x1={x}
                   y1={yHigh}
                   x2={x}
@@ -366,10 +396,16 @@ export default function InteractiveCandleChart({
                   height={candleHeight}
                   fill={color}
                   rx="0.5"
-                />
+                /></>}
               </g>
             );
           })}
+
+          {levels.map(level => <g key={level.label} className="pointer-events-none">
+            <line x1={padding.left} x2={width - padding.right} y1={getY(level.value)} y2={getY(level.value)} stroke={level.color} strokeDasharray="6 5" />
+            <rect x={width - padding.right - 105} y={getY(level.value) - 17} width={100} height={15} rx={3} fill="#0B1320" />
+            <text x={width - padding.right - 8} y={getY(level.value) - 6} textAnchor="end" fill={level.color} fontSize={10}>{level.label} {level.value.toFixed(2)}</text>
+          </g>)}
 
           {/* Sub-Pane: RSI, MACD, or ATR */}
           {subPane !== "NONE" && (
@@ -447,9 +483,9 @@ export default function InteractiveCandleChart({
                   {/* MACD Zero Line */}
                   <line
                     x1={padding.left}
-                    y1={getSubY(0, -3, 3)}
+                    y1={getSubY(0, macdDomain.min, macdDomain.max)}
                     x2={width - padding.right}
-                    y2={getSubY(0, -3, 3)}
+                    y2={getSubY(0, macdDomain.min, macdDomain.max)}
                     stroke="#4B5563"
                     strokeDasharray="2 2"
                   />
@@ -457,8 +493,8 @@ export default function InteractiveCandleChart({
                   {bars.map((b, idx) => {
                     if (b.macd_hist === null || b.macd_hist === undefined) return null;
                     const x = getX(idx);
-                    const zeroY = getSubY(0, -3, 3);
-                    const valY = getSubY(b.macd_hist, -3, 3);
+                    const zeroY = getSubY(0, macdDomain.min, macdDomain.max);
+                    const valY = getSubY(b.macd_hist, macdDomain.min, macdDomain.max);
                     const h = Math.abs(valY - zeroY);
                     const y = b.macd_hist >= 0 ? valY : zeroY;
                     const col = b.macd_hist >= 0 ? "#10B981" : "#EF4444";
@@ -502,12 +538,12 @@ export default function InteractiveCandleChart({
           )}
 
           {/* Synchronized Crosshair on Hover */}
-          {hoverIndex !== null && (
+          {safeHover !== null && (
             <g className="pointer-events-none">
               <line
-                x1={getX(hoverIndex)}
+                x1={getX(safeHover)}
                 y1={padding.top}
-                x2={getX(hoverIndex)}
+                x2={getX(safeHover)}
                 y2={priceHeight + subHeight}
                 stroke="#6B7280"
                 strokeWidth="1"
@@ -515,9 +551,9 @@ export default function InteractiveCandleChart({
               />
               <line
                 x1={padding.left}
-                y1={getY(bars[hoverIndex].close)}
+                y1={getY(bars[safeHover].close)}
                 x2={width - padding.right}
-                y2={getY(bars[hoverIndex].close)}
+                y2={getY(bars[safeHover].close)}
                 stroke="#6B7280"
                 strokeWidth="1"
                 strokeDasharray="3 3"

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ListChecks, RefreshCw, Search, StopCircle, ChevronDown, ChevronUp, ArrowUpRight } from "lucide-react";
 import { getAllStockPlans, refreshStockPlan } from "@/lib/api";
 import { StockPlan } from "@/lib/types";
+import { ratingColor } from "@/components/TechnicalSummaryCard";
 
 const needsData = (row: StockPlan) => row.listing_status === "ACTIVE" &&
   ["DATA_UNAVAILABLE", "DATA_NOT_CURRENT", "INSUFFICIENT_DATA", "ERROR"].includes(row.status);
@@ -22,6 +23,7 @@ export default function AllStockPlansPage() {
   const [sector, setSector] = useState("");
   const [filter, setFilter] = useState("all");
   const [scenario, setScenario] = useState<"pullback" | "breakout">("pullback");
+  const [signalFilter, setSignalFilter] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [updating, setUpdating] = useState<string[]>([]);
@@ -106,6 +108,7 @@ export default function AllStockPlansPage() {
     const plan = scenario === "pullback" ? row.trade_plan : row.breakout_entry;
     const matchesSearch = !search || normalize(`${row.ticker} ${row.arabic_name} ${row.english_name}`).includes(normalize(search));
     return matchesSearch && (!sector || sector === row.sector) &&
+      (!signalFilter || (row.technical_rating?.is_current && row.technical_rating.signal === signalFilter)) &&
       (filter === "all" || (filter === "ready" && !!plan) || (filter === "needs-data" && needsData(row)) ||
         (filter === "in-zone" && scenario === "pullback" && row.trade_plan?.plan_status === "ACTIVE"));
   });
@@ -142,13 +145,14 @@ export default function AllStockPlansPage() {
       <progress value={progress.completed} max={progress.total || 1} className="w-full h-2 accent-emerald-500" />
     </div>}
 
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
       <label className="text-xs text-gray-400 space-y-1"><span>سيناريو الدخول</span><select value={scenario} onChange={(event) => { setScenario(event.target.value as "pullback" | "breakout"); setFilter("all"); }} className={controlClass}>
         <option value="pullback">تراجع للدعم / إعادة اختبار</option><option value="breakout">اختراق المقاومة</option>
       </select></label>
       <label className="text-xs text-gray-400 space-y-1"><span>بحث بالاسم أو الرمز</span><div className="relative"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="مثال: MBSC أو مصر بني سويف" className={controlClass + " pl-9"} /><Search className="absolute left-3 top-3.5 w-4 h-4" /></div></label>
       <label className="text-xs text-gray-400 space-y-1"><span>القطاع</span><select value={sector} onChange={(event) => setSector(event.target.value)} className={controlClass}><option value="">كل القطاعات</option>{sectors.map((value) => <option key={value}>{value}</option>)}</select></label>
       <label className="text-xs text-gray-400 space-y-1"><span>حالة الخطة</span><select value={filter} onChange={(event) => setFilter(event.target.value)} className={controlClass}><option value="all">كل الأسهم</option><option value="ready">لها خطة في هذا السيناريو</option><option value="needs-data">تحتاج جلب بيانات</option>{scenario === "pullback" && <option value="in-zone">داخل نطاق الدخول عند الإغلاق</option>}</select></label>
+      <label className="text-xs text-gray-400 space-y-1"><span>الإشارة الفنية الحالية</span><select value={signalFilter} onChange={event => setSignalFilter(event.target.value)} className={controlClass}><option value="">كل الإشارات</option><option value="STRONG_BUY">شراء قوي</option><option value="BUY">شراء</option><option value="NEUTRAL">محايد</option><option value="SELL">بيع</option><option value="STRONG_SELL">بيع قوي</option></select></label>
     </div>
 
     {error && <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 p-4 text-sm">{error}</div>}
@@ -157,7 +161,7 @@ export default function AllStockPlansPage() {
         <div className="p-8 text-center text-gray-400 text-sm">اضغط «إعادة حساب المحفوظ» بعد تشغيل الباك إند.</div> : !visible.length ?
         <div className="p-12 text-center text-gray-400 text-sm">لا توجد نتائج مطابقة للبحث والفلاتر.</div> :
         <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-right text-xs divide-y divide-surfaceBorder">
-          <thead className="bg-surfaceHover text-gray-400"><tr>{["السهم", "آخر إغلاق", "نطاق الدخول", "وقف الخسارة", "هدف 1", "هدف 2", "هدف 3", "حالة الخطة", "جلسة الحساب", "الإجراءات"].map((title) => <th key={title} className="px-3 py-4 whitespace-nowrap">{title}</th>)}</tr></thead>
+          <thead className="bg-surfaceHover text-gray-400"><tr>{["السهم", "آخر إغلاق", "الإشارة الفنية", "نطاق الدخول", "وقف الخسارة", "هدف 1", "هدف 2", "هدف 3", "حالة الخطة", "جلسة الحساب", "الإجراءات"].map((title) => <th key={title} className="px-3 py-4 whitespace-nowrap">{title}</th>)}</tr></thead>
           <tbody className="divide-y divide-surfaceBorder">{visible.map((row) => {
             const plan = scenario === "pullback" ? row.trade_plan : row.breakout_entry;
             const isUpdating = updating.includes(row.ticker);
@@ -168,6 +172,7 @@ export default function AllStockPlansPage() {
               <tr className="hover:bg-surfaceHover/50 text-gray-300">
                 <td className="px-3 py-4 max-w-[190px]"><Link href={`/stocks/${row.ticker}`} className="font-black text-white font-mono text-sm hover:text-primary">{row.ticker}</Link><div className="mt-1 text-[11px] text-gray-400">{row.arabic_name}</div></td>
                 <td className="px-3 py-4 font-mono num-ltr text-white">{money(row.latest_close)}</td>
+                <td className="px-3 py-4 whitespace-nowrap">{row.technical_rating?.is_current ? <><span className={`font-bold ${ratingColor(row.technical_rating.signal)}`}>{row.technical_rating.signal_ar} · {row.technical_rating.score.toFixed(0)}</span><p className="mt-1 text-[10px] text-gray-500">{row.technical_rating.available_count}/26 مؤشر · اتفاق {row.technical_rating.agreement_pct.toFixed(0)}%</p></> : <span className="text-gray-500">لا توجد إشارة حالية</span>}</td>
                 <td className="px-3 py-4"><span className="font-mono num-ltr font-bold text-primary whitespace-nowrap">{plan ? `${money(plan.entry_zone_min)} – ${money(plan.entry_zone_max)}` : "—"}</span>{scenario === "breakout" && plan && <p className="text-[10px] text-gray-500 mt-1">بعد اختراق المقاومة</p>}</td>
                 <td className="px-3 py-4 font-mono num-ltr font-bold text-rose-400">{money(plan?.stop_loss)}</td>
                 {[plan?.target_1, plan?.target_2, plan?.target_3].map((value, index) => <td key={index} className="px-3 py-4 font-mono num-ltr text-emerald-300">{money(value)}</td>)}
@@ -178,8 +183,9 @@ export default function AllStockPlansPage() {
                   <button type="button" onClick={() => refreshRows([row])} disabled={running || row.listing_status !== "ACTIVE"} aria-label={`تحديث خطة ${row.ticker}`} className="p-2 bg-surfaceHover rounded-lg hover:text-primary disabled:opacity-40"><RefreshCw className={`w-4 h-4 ${isUpdating ? "animate-spin text-primary" : ""}`} /></button>
                 </div></td>
               </tr>
-              {isExpanded && <tr><td colSpan={10} className="p-5 bg-background/30"><div className="space-y-3 text-gray-300">
+              {isExpanded && <tr><td colSpan={11} className="p-5 bg-background/30"><div className="space-y-3 text-gray-300">
                 <p>{row.reason_ar}</p>
+                {row.technical_rating && <p className="text-gray-400">تقييم {row.technical_rating.as_of_session}: {row.technical_rating.signal_ar} · {row.technical_rating.available_count}/26 مؤشر. الاتفاق ليس احتمال ربح، والإشارة لا تتجاوز شرط الدخول.</p>}
                 {scenario === "pullback" && row.trade_plan && <><p>{row.trade_plan.entry_basis}</p><p className="text-rose-300">{row.trade_plan.stop_basis}</p><p>{row.trade_plan.trigger_condition}</p></>}
                 {scenario === "breakout" && row.breakout_entry && <><p>{row.breakout_entry.reason_ar}</p><p>{row.breakout_entry.confirmation_ar}</p></>}
                 <p className="text-gray-500">المصدر: {row.actual_provider || "غير متاح"} · الجلسات الصالحة: {row.analytical_bars_count} · الجلسة المطلوبة: {row.expected_latest_session}</p>

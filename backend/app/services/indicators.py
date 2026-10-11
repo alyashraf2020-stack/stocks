@@ -2,6 +2,7 @@
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
+from app.services.smoothing import wilder, rsi
 
 class TechnicalIndicatorEngine:
     """
@@ -37,19 +38,7 @@ class TechnicalIndicatorEngine:
         df["sma_50"] = df["close"].rolling(window=50, min_periods=50).mean()
 
         # 3. RSI 14 (Wilder's Smoothing)
-        delta = df["close"].diff()
-        gain = delta.clip(lower=0.0)
-        loss = -delta.clip(upper=0.0)
-        
-        # Wilder's exponential smoothing uses alpha = 1 / period
-        avg_gain = gain.ewm(alpha=1.0 / 14.0, min_periods=14, adjust=False).mean()
-        avg_loss = loss.ewm(alpha=1.0 / 14.0, min_periods=14, adjust=False).mean()
-        
-        rs = avg_gain / avg_loss.replace(0.0, np.nan)
-        rsi = 100.0 - (100.0 / (1.0 + rs))
-        # Where avg_loss was 0, if avg_gain > 0 RSI = 100, else 50
-        rsi = rsi.fillna(100.0).where(avg_loss == 0.0, rsi)
-        df["rsi_14"] = rsi
+        df["rsi_14"] = rsi(df["close"])
 
         # 4. MACD (12, 26, 9)
         ema_12 = df["close"].ewm(span=12, min_periods=12, adjust=False).mean()
@@ -76,7 +65,7 @@ class TechnicalIndicatorEngine:
         tr2 = (df["high"] - prev_close).abs()
         tr3 = (df["low"] - prev_close).abs()
         true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        df["atr_14"] = true_range.ewm(alpha=1.0 / 14.0, min_periods=14, adjust=False).mean()
+        df["atr_14"] = wilder(true_range)
 
         # Convert back to clean list of dicts with Python native types (handling NaN -> None)
         enriched_bars: List[Dict[str, Any]] = []
