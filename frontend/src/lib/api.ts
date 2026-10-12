@@ -116,6 +116,7 @@ export async function postLiveAnalysis(data: {
   owns_stock?: boolean;
   buy_price?: number;
   shares_owned?: number;
+  add_on_cash?: number;
   bid_depth_qty?: number;
   ask_depth_qty?: number;
 }): Promise<LiveAnalysisResult> {

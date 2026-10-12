@@ -193,6 +193,27 @@ export interface OwnerAddOnSizing {
   remaining_risk_budget_egp: number;
   suggested_add_on_shares: number;
   estimated_add_on_value_egp: number;
+  portfolio_capital_egp: number;
+  available_add_on_cash_egp: number | null;
+  cash_constraint_applied: boolean;
+  sizing_price: number;
+  sizing_price_basis: string;
+  valuation_price: number;
+  reserved_position_value_egp: number;
+  max_allocation_pct: number;
+  max_risk_pct: number;
+  max_risk_allowed_egp: number;
+  risk_per_added_share_egp: number;
+  shares_by_allocation: number;
+  shares_by_risk: number;
+  shares_by_cash: number | null;
+  limiting_factors: string[];
+  shares_after_add_on: number;
+  average_buy_price_after_add_on: number | null;
+  remaining_cash_after_add_on_egp: number | null;
+  position_value_after_add_on_egp: number;
+  risk_to_stop_after_add_on_egp: number;
+  executable_add_on_shares: number;
 }
 
 export interface OwnerAddOn {

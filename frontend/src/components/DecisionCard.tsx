@@ -83,6 +83,9 @@ export default function DecisionCard({
   const planStatus = trade_plan?.plan_status || result.plan_status;
   const isNoSetup = planStatus === "NO_VALID_SETUP" || trade_plan?.entry_zone_min == null;
   const isTargetsCompleted = planStatus === "TARGETS_COMPLETED";
+  const addSizing = owner_add_on?.sizing;
+  const addMoney = (value?: number | null) => value == null ? "—" : `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} ج.م`;
+  const addShares = (value?: number | null) => value == null ? "—" : `${value.toLocaleString()} سهم`;
   const effectivePreviousPlan = previousPlan || result.previous_plan;
 
   return (
@@ -132,14 +135,37 @@ export default function DecisionCard({
           {owner_add_on.entry_zone_min != null && owner_add_on.entry_zone_max != null && (
             <div className="text-xs text-gray-400">منطقة التعزيز الحالية: <strong className="text-white num-ltr">{owner_add_on.entry_zone_min.toFixed(2)} – {owner_add_on.entry_zone_max.toFixed(2)} ج.م</strong></div>
           )}
-          {owner_add_on.sizing && (
+          {addSizing && <>
+            <p className="text-[11px] text-gray-400">سعر حساب التعزيز: {addMoney(addSizing.sizing_price)} · {addSizing.sizing_price_basis === "CURRENT_PRICE_IN_ZONE" ? "السعر المدخل داخل النطاق" : "الحد الأعلى للنطاق لسيناريو مشروط"}</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-              <Metric label="أسهم التعزيز القصوى" value={`${owner_add_on.sizing.suggested_add_on_shares.toLocaleString()} سهم`} accent="text-cyan-300" />
-              <Metric label="قيمة التعزيز التقريبية" value={`${owner_add_on.sizing.estimated_add_on_value_egp.toLocaleString()} ج.م`} />
-              <Metric label="التخصيص المتبقي" value={`${owner_add_on.sizing.remaining_allocation_egp.toLocaleString()} ج.م`} />
-              <Metric label="ميزانية المخاطرة المتبقية" value={`${owner_add_on.sizing.remaining_risk_budget_egp.toLocaleString()} ج.م`} />
+              <Metric label="الكمية ضمن الحدود عند تحقق الشرط" value={addShares(addSizing.suggested_add_on_shares)} accent="text-cyan-300" />
+              <Metric label="المتاح للتنفيذ الآن حسب المدخلات" value={addShares(addSizing.executable_add_on_shares)} />
+              <Metric label="تكلفة التعزيز المحسوبة" value={addMoney(addSizing.estimated_add_on_value_egp)} />
+              <Metric label="متوسط الشراء بعد التعزيز المشروط" value={addSizing.average_buy_price_after_add_on == null ? "يلزم متوسط الشراء" : `${addSizing.average_buy_price_after_add_on.toFixed(4)} ج.م`} />
+              <Metric label="إجمالي الأسهم بعد التعزيز" value={addShares(addSizing.shares_after_add_on)} />
+              <Metric label="الكاش المتبقي بعد التعزيز" value={addMoney(addSizing.remaining_cash_after_add_on_egp)} />
+              <Metric label="التخصيص المتبقي قبل التعزيز" value={addMoney(addSizing.remaining_allocation_egp)} />
+              <Metric label="المخاطرة المتبقية قبل التعزيز" value={addMoney(addSizing.remaining_risk_budget_egp)} />
             </div>
-          )}
+            <details className="text-xs text-gray-400 border-t border-cyan-500/10 pt-3">
+              <summary className="cursor-pointer text-cyan-300 font-bold">تفاصيل حساب التعزيز وسبب تقييد الكمية</summary>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center mt-3">
+                <Metric label="إجمالي قيمة المحفظة" value={addMoney(addSizing.portfolio_capital_egp)} />
+                <Metric label="قيمة المركز بالسعر المدخل" value={addMoney(addSizing.current_position_value_egp)} />
+                <Metric label="كاش التعزيز المدخل" value={addMoney(addSizing.available_add_on_cash_egp)} />
+                <Metric label={`حد تخصيص السهم (${addSizing.max_allocation_pct}%)`} value={addMoney(addSizing.max_total_allocation_egp)} />
+                <Metric label={`حد المخاطرة (${addSizing.max_risk_pct}%)`} value={addMoney(addSizing.max_risk_allowed_egp)} />
+                <Metric label="مخاطرة المركز حتى الوقف" value={addMoney(addSizing.existing_risk_to_stop_egp)} />
+                <Metric label="عدد الأسهم حسب التخصيص" value={addShares(addSizing.shares_by_allocation)} />
+                <Metric label="عدد الأسهم حسب المخاطرة" value={addShares(addSizing.shares_by_risk)} />
+                <Metric label="عدد الأسهم حسب الكاش" value={addShares(addSizing.shares_by_cash)} />
+              </div>
+              <p className="mt-3">الحد الذي قيد الكمية: {addSizing.limiting_factors?.map(factor => ({ CASH: "الكاش", RISK: "المخاطرة", ALLOCATION: "التخصيص" }[factor] || factor)).join("، ") || "—"}. الكمية هي أصغر عدد صحيح من الحدود الثلاثة.</p>
+              <p className="mt-2">متوسط الشراء = (تكلفة الأسهم المملوكة + تكلفة التعزيز) ÷ إجمالي الأسهم بعده. الحساب بدون عمولات أو انزلاق سعري.</p>
+              {addSizing.valuation_price !== current_price && <p className="mt-2">للسيناريو المشروط تم حجز قيمة المركز عند {addMoney(addSizing.valuation_price)} لضمان أن العودة لسعر الدخول لا تقلل المساحة المطلوبة حسابيًا.</p>}
+              {!addSizing.cash_constraint_applied && <p className="text-amber-300 mt-2">الكاش لم يُحدد؛ الكمية المعروضة سعة حسابية فقط. أدخل مبلغ التعزيز وأعد التحليل.</p>}
+            </details>
+          </>}
         </div>
       )}
 

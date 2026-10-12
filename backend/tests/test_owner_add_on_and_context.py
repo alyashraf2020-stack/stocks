@@ -37,6 +37,7 @@ def test_owner_add_on_can_add_inside_zone_when_capacity_exists():
         shares_owned=100,
         trade_plan=sample_plan(),
         sessions_behind=0,
+        add_on_cash=1000.0,
     )
     assert result["decision"] == "ADD_NOW"
     assert result["sizing"]["suggested_add_on_shares"] > 0

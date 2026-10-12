@@ -1,17 +1,24 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 from app.schemas.analysis import TradePlanResponse
 
 
 class LiveAnalysisRequest(BaseModel):
     ticker: str = Field(..., description="EGX Stock Ticker, e.g. COMI")
-    current_price: float = Field(..., gt=0, description="Manual current market price in EGP")
-    capital: float = Field(..., gt=0, description="Total portfolio capital in EGP")
+    current_price: float = Field(..., gt=0, allow_inf_nan=False, description="Manual current market price in EGP")
+    capital: float = Field(..., gt=0, allow_inf_nan=False, description="Total portfolio value including holdings and cash in EGP")
     owns_stock: bool = Field(False, description="True if the user already holds a position")
-    buy_price: Optional[float] = Field(None, description="Purchase price in EGP if already owned")
-    shares_owned: Optional[int] = Field(None, description="Number of shares held if already owned")
+    buy_price: Optional[float] = Field(None, gt=0, allow_inf_nan=False, description="Purchase price in EGP if already owned")
+    shares_owned: Optional[int] = Field(None, ge=1, strict=True, description="Number of shares held if already owned")
+    add_on_cash: Optional[float] = Field(None, ge=0, allow_inf_nan=False, description="Cash available for this add-on, included in total portfolio value")
     bid_depth_qty: Optional[float] = Field(None, ge=0, description="Optional total buy-side depth from broker screen")
     ask_depth_qty: Optional[float] = Field(None, ge=0, description="Optional total sell-side depth from broker screen")
+
+    @model_validator(mode="after")
+    def cash_within_portfolio(self):
+        if self.add_on_cash is not None and self.add_on_cash > self.capital:
+            raise ValueError("مبلغ التعزيز لا يتجاوز إجمالي قيمة المحفظة؛ أضف أي إيداع جديد إلى إجمالي المحفظة أولًا.")
+        return self
 
 
 class ManualEODRequest(BaseModel):
@@ -56,6 +63,27 @@ class OwnerAddOnSizingResponse(BaseModel):
     remaining_risk_budget_egp: float
     suggested_add_on_shares: int
     estimated_add_on_value_egp: float
+    portfolio_capital_egp: float
+    available_add_on_cash_egp: Optional[float] = None
+    cash_constraint_applied: bool
+    sizing_price: float
+    sizing_price_basis: str
+    valuation_price: float
+    reserved_position_value_egp: float
+    max_allocation_pct: float
+    max_risk_pct: float
+    max_risk_allowed_egp: float
+    risk_per_added_share_egp: float
+    shares_by_allocation: int
+    shares_by_risk: int
+    shares_by_cash: Optional[int] = None
+    limiting_factors: List[str]
+    shares_after_add_on: int
+    average_buy_price_after_add_on: Optional[float] = None
+    remaining_cash_after_add_on_egp: Optional[float] = None
+    position_value_after_add_on_egp: float
+    risk_to_stop_after_add_on_egp: float
+    executable_add_on_shares: int
 
 
 class OwnerAddOnResponse(BaseModel):

@@ -179,6 +179,8 @@ def analyze_live_price(req: LiveAnalysisRequest, db: Session = Depends(get_db)):
             shares_owned=req.shares_owned,
             trade_plan=decision_result.get("trade_plan"),
             sessions_behind=data_res.get("sessions_behind"),
+            buy_price=req.buy_price,
+            add_on_cash=req.add_on_cash,
         )
 
     # 6. Verified corporate events are context only; they never force a buy signal.

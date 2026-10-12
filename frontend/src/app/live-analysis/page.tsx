@@ -31,6 +31,7 @@ function LiveAnalysisContent() {
   const [ownsStock, setOwnsStock] = useState(false);
   const [buyPrice, setBuyPrice] = useState("");
   const [sharesOwned, setSharesOwned] = useState("");
+  const [addOnCash, setAddOnCash] = useState("");
 
   // Optional Level-2 totals copied from the user's broker screen.
   const [bidDepthQty, setBidDepthQty] = useState("");
@@ -41,6 +42,7 @@ function LiveAnalysisContent() {
   const [error, setError] = useState<string | null>(null);
 
   const activeTickerRef = useRef<string | null>(urlTicker);
+  const analysisGeneration = useRef(0);
   const [lastCheckTime, setLastCheckTime] = useState<string | null>(null);
   const [newSessionDetected, setNewSessionDetected] = useState(false);
   const [newSessionNotice, setNewSessionNotice] = useState<string | null>(null);
@@ -57,6 +59,7 @@ function LiveAnalysisContent() {
     setCurrentPrice("");
     setBuyPrice("");
     setSharesOwned("");
+    setAddOnCash("");
     setBidDepthQty("");
     setAskDepthQty("");
     setNewSessionDetected(false);
@@ -174,6 +177,13 @@ function LiveAnalysisContent() {
   const isPriceValid = !isNaN(parseFloat(currentPrice)) && parseFloat(currentPrice) > 0;
   const canAnalyze = Boolean(selectedStock && isPriceValid && !loading);
 
+  // Results describe one submitted snapshot, not the user's unfinished edits.
+  useEffect(() => {
+    analysisGeneration.current += 1;
+    setResult(null);
+    setLoading(false);
+  }, [currentPrice, capital, ownsStock, buyPrice, sharesOwned, addOnCash]);
+
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStock) {
@@ -183,16 +193,29 @@ function LiveAnalysisContent() {
 
     const priceNum = parseFloat(currentPrice);
     const capitalNum = parseFloat(capital);
-    if (isNaN(priceNum) || priceNum <= 0) {
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
       setError("يرجى إدخال سعر لحظي صحيح أكبر من الصفر");
       return;
     }
-    if (isNaN(capitalNum) || capitalNum <= 0) {
+    if (!Number.isFinite(capitalNum) || capitalNum <= 0) {
       setError("يرجى إدخال رأس مال صحيح أكبر من الصفر");
+      return;
+    }
+    if (ownsStock && (!Number.isInteger(Number(sharesOwned)) || Number(sharesOwned) <= 0)) {
+      setError("أدخل عدد الأسهم المملوكة كعدد صحيح أكبر من الصفر");
+      return;
+    }
+    if (ownsStock && (!Number.isFinite(Number(buyPrice)) || Number(buyPrice) <= 0)) {
+      setError("أدخل متوسط سعر شراء صحيح لحساب المتوسط بعد التعزيز");
+      return;
+    }
+    if (ownsStock && (addOnCash.trim() === "" || !Number.isFinite(Number(addOnCash)) || Number(addOnCash) < 0 || Number(addOnCash) > capitalNum)) {
+      setError("أدخل مبلغ التعزيز المتاح بين صفر وإجمالي قيمة المحفظة");
       return;
     }
 
     const targetTicker = selectedStock.ticker;
+    const requestGeneration = analysisGeneration.current;
     setLoading(true);
     setError(null);
 
@@ -203,22 +226,23 @@ function LiveAnalysisContent() {
         capital: capitalNum,
         owns_stock: ownsStock,
         buy_price: ownsStock && buyPrice ? parseFloat(buyPrice) : undefined,
-        shares_owned: ownsStock && sharesOwned ? parseInt(sharesOwned, 10) : undefined,
+        shares_owned: ownsStock ? Number(sharesOwned) : undefined,
+        add_on_cash: ownsStock ? Number(addOnCash) : undefined,
         bid_depth_qty: bidDepthQty ? parseFloat(bidDepthQty) : undefined,
         ask_depth_qty: askDepthQty ? parseFloat(askDepthQty) : undefined,
       });
-      if (activeTickerRef.current === targetTicker) {
+      if (activeTickerRef.current === targetTicker && requestGeneration === analysisGeneration.current) {
         setResult(res);
         if (res.previous_plan) setPreviousPlan(res.previous_plan);
         setNewSessionNotice(null);
         setNewSessionDetected(false);
       }
     } catch (err: any) {
-      if (activeTickerRef.current === targetTicker) {
+      if (activeTickerRef.current === targetTicker && requestGeneration === analysisGeneration.current) {
         setError(err.message || "حدث خطأ أثناء تحليل السعر اللحظي");
       }
     } finally {
-      if (activeTickerRef.current === targetTicker) setLoading(false);
+      if (activeTickerRef.current === targetTicker && requestGeneration === analysisGeneration.current) setLoading(false);
     }
   };
 
@@ -280,11 +304,12 @@ function LiveAnalysisContent() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-300 block flex items-center justify-between"><span>3. رأس المال المتاح بالمحفظة (ج.م) <span className="text-rose-400">*</span></span><span className="text-[11px] text-gray-500">لحساب حجم الصفقة الآمن</span></label>
+            <label htmlFor="portfolio-capital" className="text-xs font-bold text-gray-300 block flex items-center justify-between"><span>3. إجمالي قيمة المحفظة (ج.م) <span className="text-rose-400">*</span></span></label>
             <div className="relative">
-              <input type="number" step="1" min="1" value={capital} onChange={(e) => setCapital(e.target.value)} placeholder="مثال: 100000" required className="w-full bg-surfaceHover border border-surfaceBorder rounded-xl px-4 py-3 pl-12 text-sm text-white font-mono font-bold focus:outline-none focus:border-primary" />
+              <input id="portfolio-capital" type="number" step="0.01" min="0.01" value={capital} onChange={(e) => setCapital(e.target.value)} placeholder="مثال: 100000" required className="w-full bg-surfaceHover border border-surfaceBorder rounded-xl px-4 py-3 pl-12 text-sm text-white font-mono font-bold focus:outline-none focus:border-primary" />
               <span className="absolute left-3 top-3.5 text-xs text-gray-400 font-mono">ج.م</span>
             </div>
+            <p className="text-[11px] text-gray-500">القيمة الحالية للأسهم والكاش معًا؛ مبلغ التعزيز جزء منها. حدود البرنامج: تخصيص 20% للسهم ومخاطرة 1.5% حتى الوقف.</p>
           </div>
         </div>
 
@@ -294,14 +319,19 @@ function LiveAnalysisContent() {
             <span className="text-sm font-bold text-gray-300">أنا أملك هذا السهم بالفعل في محفظتي (تقييم مركز قائم)</span>
           </label>
           {ownsStock && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-surfaceHover/60 border border-surfaceBorder rounded-xl p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-surfaceHover/60 border border-surfaceBorder rounded-xl p-4">
               <div className="space-y-1">
-                <label className="text-xs text-gray-400">متوسط سعر الشراء (ج.م)</label>
-                <input type="number" step="0.01" min="0" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder="مثال: 5.41" className="w-full bg-surface border border-surfaceBorder rounded-lg px-3 py-2 text-sm text-white font-mono" />
+                <label htmlFor="owner-buy-price" className="text-xs text-gray-400">متوسط سعر الشراء (ج.م)</label>
+                <input id="owner-buy-price" type="number" step="0.0001" min="0.0001" required value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder="مثال: 5.41" className="w-full bg-surface border border-surfaceBorder rounded-lg px-3 py-2 text-sm text-white font-mono" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-gray-400">عدد الأسهم المملوكة</label>
-                <input type="number" step="1" min="0" value={sharesOwned} onChange={(e) => setSharesOwned(e.target.value)} placeholder="مثال: 322" className="w-full bg-surface border border-surfaceBorder rounded-lg px-3 py-2 text-sm text-white font-mono" />
+                <label htmlFor="owner-shares" className="text-xs text-gray-400">عدد الأسهم المملوكة</label>
+                <input id="owner-shares" type="number" step="1" min="1" required value={sharesOwned} onChange={(e) => setSharesOwned(e.target.value)} placeholder="مثال: 322" className="w-full bg-surface border border-surfaceBorder rounded-lg px-3 py-2 text-sm text-white font-mono" />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="add-on-cash" className="text-xs text-cyan-300">المبلغ المتاح للتعزيز (ج.م)</label>
+                <input id="add-on-cash" type="number" step="0.01" min="0" max={Number(capital) || undefined} required value={addOnCash} onChange={(e) => setAddOnCash(e.target.value)} placeholder="مثال: 2000" className="w-full bg-surface border border-surfaceBorder rounded-lg px-3 py-2 text-sm text-white font-mono" />
+                <p className="text-[11px] text-gray-500">كاش يمكنك استخدامه لهذا السهم؛ الصفر يعني لا يوجد كاش للتعزيز.</p>
               </div>
             </div>
           )}
@@ -342,9 +372,9 @@ function LiveAnalysisContent() {
         <DecisionCard
           result={result}
           arabicName={selectedStock?.arabic_name}
-          ownsStock={ownsStock}
-          buyPrice={ownsStock && buyPrice ? parseFloat(buyPrice) : undefined}
-          sharesOwned={ownsStock && sharesOwned ? parseInt(sharesOwned, 10) : undefined}
+          ownsStock={Boolean(result.owns_stock)}
+          buyPrice={result.buy_price ?? undefined}
+          sharesOwned={result.shares_owned ?? undefined}
           previousPlan={previousPlan}
         />
       )}
