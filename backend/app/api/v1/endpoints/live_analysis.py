@@ -16,6 +16,7 @@ from app.services.corporate_events import CorporateEventService
 from app.services.market_depth import MarketDepthService
 from app.services.breakout_entry import BreakoutEntryAdvisor
 from app.services.validator import CandleValidator
+from app.services.egx_calendar import get_expected_latest_completed_session
 from app.models.candle import EGXCandle
 
 router = APIRouter()
@@ -27,22 +28,10 @@ def save_manual_eod(req: ManualEODRequest, db: Session = Depends(get_db)):
     if not sec:
         raise HTTPException(status_code=400, detail="السهم غير مدرج في البورصة المصرية.")
 
-    data_res = default_provider_manager.get_analytical_bars(
-        sec.ticker,
-        limit=250,
-        db=db,
-        force_refresh=True,
-    )
-
-    expected_session = data_res.get("expected_latest_session")
-    if not expected_session:
-        raise HTTPException(status_code=400, detail="تعذر تحديد آخر جلسة مكتملة متوقعة.")
-
-    if data_res.get("sessions_behind") == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="البيانات محدثة بالفعل ولا تحتاج إدخال جلسة يدويًا.",
-        )
+    # Manual EOD is also a correction path. A public provider can publish the
+    # correct date with a wrong OHLCV payload, so "current" does not mean the
+    # user must be prevented from replacing that completed session.
+    expected_session = get_expected_latest_completed_session().isoformat()
 
     if req.session_date != expected_session:
         raise HTTPException(
@@ -85,12 +74,6 @@ def save_manual_eod(req: ManualEODRequest, db: Session = Depends(get_db)):
         .first()
     )
 
-    if existing and existing.actual_provider != "USER_VERIFIED_EOD":
-        raise HTTPException(
-            status_code=409,
-            detail="توجد بالفعل جلسة محفوظة من مزود بيانات لهذا التاريخ، ولن يتم استبدالها يدويًا.",
-        )
-
     if existing:
         existing.open = req.open
         existing.high = req.high
@@ -121,7 +104,7 @@ def save_manual_eod(req: ManualEODRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="تعذر حفظ بيانات الجلسة يدويًا.")
 
     if validated.get("open_status") == "RAW_OPEN":
-        message_ar = "تم حفظ الجلسة المدخلة يدويًا والتحقق من OHLCV. أعد التحليل الآن."
+        message_ar = "تم حفظ وتصحيح الجلسة المدخلة يدويًا والتحقق من OHLCV. أعد التحليل الآن."
     else:
         message_ar = (
             "تم حفظ الجلسة والتحقق من High/Low/Close/Volume. قيمة Open من الوسيط محفوظة "

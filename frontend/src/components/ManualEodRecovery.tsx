@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Database } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, PencilLine } from "lucide-react";
 import { getStockDetail, submitManualEod } from "@/lib/api";
 import { Stock } from "@/lib/types";
 
@@ -22,6 +22,7 @@ export default function ManualEodRecovery() {
   const [close, setClose] = useState("");
   const [volume, setVolume] = useState("");
   const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -37,7 +38,10 @@ export default function ManualEodRecovery() {
 
     if (!ticker) return;
     getStockDetail(ticker)
-      .then(setStock)
+      .then((detail) => {
+        setStock(detail);
+        setExpanded(detail.sessions_behind == null || detail.sessions_behind > 0);
+      })
       .catch(() => setStock(null));
   }, [ticker]);
 
@@ -50,11 +54,12 @@ export default function ManualEodRecovery() {
     return o < l || o > h;
   }, [open, high, low]);
 
-  if (!ticker || !stock || stock.sessions_behind == null || stock.sessions_behind <= 0) {
+  if (!ticker || !stock || !stock.expected_session_date) {
     return null;
   }
 
   const expectedSession = stock.expected_session_date;
+  const needsRecovery = stock.sessions_behind == null || stock.sessions_behind > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,15 +111,39 @@ export default function ManualEodRecovery() {
     }
   };
 
+  if (!expanded) {
+    return (
+      <div className="max-w-4xl mx-auto mb-6">
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-black text-amber-300 hover:bg-amber-500/15 transition-colors"
+        >
+          <PencilLine className="w-4 h-4" />
+          إدخال أو تصحيح بيانات جلسة {expectedSession} يدويًا
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto mb-6">
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 sm:p-6 shadow-xl">
         <div className="flex items-start gap-3 mb-4">
           <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <h2 className="text-sm sm:text-base font-black text-amber-300">المصدر العام متأخر — أدخل شمعة الجلسة المكتملة مرة واحدة</h2>
+            <h2 className="text-sm sm:text-base font-black text-amber-300">
+              {needsRecovery
+                ? "المصدر العام متأخر — أدخل شمعة الجلسة المكتملة"
+                : "تصحيح يدوي لبيانات الجلسة المكتملة"}
+            </h2>
             <p className="text-xs text-gray-300 leading-relaxed">
-              آخر جلسة متاحة تلقائيًا هي <strong className="font-mono num-ltr">{stock.latest_session_date || "—"}</strong>، بينما الجلسة المطلوبة هي <strong className="font-mono num-ltr text-white">{expectedSession || "—"}</strong>. أدخل بيانات الجلسة من تطبيق الوسيط. لو قيمة Open التي يعرضها الوسيط خرجت قليلًا عن High/Low، سيحتفظ بها النظام كمرجع غير موثوق ولن يعتمد عليها في التحليل الفني.
+              {needsRecovery ? (
+                <>آخر جلسة متاحة تلقائيًا هي <strong className="font-mono num-ltr">{stock.latest_session_date || "—"}</strong>، بينما الجلسة المطلوبة هي <strong className="font-mono num-ltr text-white">{expectedSession}</strong>.</>
+              ) : (
+                <>الجلسة <strong className="font-mono num-ltr text-white">{expectedSession}</strong> موجودة من المزود، ويمكنك استبدالها بالأرقام الصحيحة من تطبيق الوسيط إذا كان الإغلاق أو أي قيمة أخرى غير صحيحة.</>
+              )}{" "}
+              أدخل Open / High / Low / Close / Volume كما ظهرت في تطبيق الوسيط. الإدخال اليدوي الموثق سيصبح هو المعتمد بدل بيانات المزود لهذه الجلسة.
             </p>
           </div>
         </div>
@@ -154,9 +183,16 @@ export default function ManualEodRecovery() {
               <Database className="w-3.5 h-3.5" />
               <span>سيُحفظ المصدر باسم USER_VERIFIED_EOD ولن يتم اختلاق أي قيمة.</span>
             </div>
-            <button type="submit" disabled={saving} className="bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-black font-black text-sm px-5 py-2.5 rounded-xl transition-colors">
-              {saving ? "جاري التحقق والحفظ..." : "حفظ الجلسة وإعادة التحليل"}
-            </button>
+            <div className="flex items-center gap-2">
+              {!needsRecovery && (
+                <button type="button" onClick={() => setExpanded(false)} disabled={saving} className="border border-surfaceBorder text-gray-300 text-sm px-4 py-2.5 rounded-xl hover:bg-surfaceHover transition-colors">
+                  إلغاء
+                </button>
+              )}
+              <button type="submit" disabled={saving} className="bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-black font-black text-sm px-5 py-2.5 rounded-xl transition-colors">
+                {saving ? "جاري التحقق والحفظ..." : "حفظ الجلسة وإعادة التحليل"}
+              </button>
+            </div>
           </div>
 
           {error && <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg p-3">{error}</div>}
