@@ -19,12 +19,18 @@ def test_api_get_all_stocks():
     assert "provenance_source" in data
     assert any(item["ticker"] == "COMI" for item in data["items"])
     assert any(item["ticker"] == "SWDY" for item in data["items"])
+    assert any(item["ticker"] == "AMES" for item in data["items"])
 
 def test_api_search_stocks():
     response = client.get("/api/v1/egx/stocks?q=السويدي")
     assert response.status_code == 200
     data = response.json()
     assert any(item["ticker"] == "SWDY" for item in data["items"])
+
+def test_api_search_ames_by_arabic_name():
+    response = client.get("/api/v1/egx/stocks?q=الإسكندرية للخدمات الطبية")
+    assert response.status_code == 200
+    assert any(item["ticker"] == "AMES" for item in response.json()["items"])
 
 def test_api_get_single_stock_valid():
     response = client.get("/api/v1/egx/stocks/COMI")

@@ -700,6 +700,17 @@
       ]
     },
     {
+      "ticker": "AMES",
+      "arabic_name": "الإسكندرية للخدمات الطبية - المركز الطبي الجديد - الإسكندرية",
+      "english_name": "Alexandria Medical Services - Alexandria New Medical Center",
+      "isin": "EGS72081C010",
+      "sector": "الرعاية الصحية والأدوية",
+      "listing_status": "ACTIVE",
+      "indices": [],
+      "source": "https://beta.egx.com.eg/en/listed/company-categories",
+      "source_updated_at": "2026-11-11T15:00:00+02:00"
+    },
+    {
       "ticker": "NIPH",
       "arabic_name": "النيل للأدوية والصناعات الكيماوية",
       "english_name": "The Nile Company for Pharmaceuticals",

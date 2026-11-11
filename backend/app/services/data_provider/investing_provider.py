@@ -384,7 +384,17 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
                 props = json.loads(match.group(1))["props"]["pageProps"]
                 instrument = props["state"]["equityStore"]["instrument"]
                 token = props.get("accessToken")
-                if (instrument["underlying"]["market"] != "Egypt"
+                exchange = instrument.get("exchange", {})
+                underlying = instrument.get("underlying", {})
+                is_egyptian_market = (
+                    underlying.get("market") == "Egypt"
+                    or (
+                        exchange.get("flag") == "EG"
+                        and str(exchange.get("id")) == "33"
+                        and exchange.get("marketHref") == "/markets/egypt"
+                    )
+                )
+                if (not is_egyptian_market
                         or str(instrument["base"]["id"]) != str(instrument_id)
                         or props.get("subdomain") != edition
                         or not isinstance(token, str) or not token):
@@ -623,8 +633,9 @@ class InvestingHistoricalProvider(BaseHistoricalProvider):
 
 
 # Extend verified mappings separately to keep previously resolved merge blocks stable.
-INVESTING_INSTRUMENT_MAP.update({"MPCI": 40612, "BIOC": 12975, "RUBX": 12950})
+INVESTING_INSTRUMENT_MAP.update({"AMES": 40568, "MPCI": 40612, "BIOC": 12975, "RUBX": 12950})
 INVESTING_PAGE_MAP: Dict[str, str] = {
+    "AMES": "https://www.investing.com/equities/alexandria-new-medical-center",
     "MBSC": "https://www.investing.com/equities/misr-beni-suef-cement",
     "MPCI": "https://www.investing.com/equities/memphis-pharmaceuticals",
     "BIOC": "https://www.investing.com/equities/glaxo-egypt",

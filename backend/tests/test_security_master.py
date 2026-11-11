@@ -2,6 +2,7 @@
 from app.core.database import SessionLocal, Base, engine
 from app.services.seeder import seed_security_master
 from app.services.security_master import SecurityMasterService, normalize_arabic
+from app.services.data_provider.investing_provider import INVESTING_INSTRUMENT_MAP, INVESTING_PAGE_MAP
 
 @pytest.fixture(scope="module")
 def db():
@@ -36,6 +37,16 @@ def test_search_by_english_name(db):
     results = SecurityMasterService.get_all(db, query="Elsewedy")
     assert len(results) > 0
     assert any(s.ticker == "SWDY" for s in results)
+
+def test_ames_is_seeded_searchable_and_has_verified_market_identity(db):
+    ames = SecurityMasterService.get_by_ticker(db, "AMES")
+    assert ames is not None
+    assert ames.isin == "EGS72081C010"
+    assert ames.sector == "الرعاية الصحية والأدوية"
+    for query in ["AMES", "الإسكندرية للخدمات الطبية", "Alexandria Medical Services", "New Medical Center"]:
+        assert any(s.ticker == "AMES" for s in SecurityMasterService.get_all(db, query=query))
+    assert INVESTING_INSTRUMENT_MAP["AMES"] == 40568
+    assert INVESTING_PAGE_MAP["AMES"].endswith("/alexandria-new-medical-center")
 
 def test_reject_non_egx_assets(db):
     # Foreign / US / Crypto / Saudi stocks must never exist
