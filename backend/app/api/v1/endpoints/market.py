@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -22,7 +22,7 @@ def get_market_status(db: Session = Depends(get_db)):
     close_time = datetime.time(14, 30)
 
     is_trading_day = is_egx_trading_day(now_cairo.date())
-    is_open = is_trading_day and (open_time <= current_time <= close_time)
+    is_open = is_trading_day and (open_time <= current_time < close_time)
 
     expected_session = get_expected_latest_completed_session(now_cairo)
 
@@ -36,7 +36,7 @@ def get_market_status(db: Session = Depends(get_db)):
 
     return {
         "is_open_now": is_open,
-        "current_cairo_time": now_cairo.strftime("%Y-%m-%d %H:%M:%S Cairo (UTC+3)"),
+        "current_cairo_time": f"{now_cairo.isoformat(timespec='seconds')} Cairo",
         "expected_latest_completed_session": expected_session.isoformat(),
         "total_listed_equities": total_listed,
         "active_equities_count": active_count,

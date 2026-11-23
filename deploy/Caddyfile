@@ -1,0 +1,26 @@
+https://{$APP_HOST} {
+    route {
+        basic_auth {
+            owner {$OWNER_PASSWORD_HASH}
+        }
+        @untrustedWrite {
+            method POST PUT PATCH DELETE
+            not header Origin https://{$APP_HOST}
+        }
+        respond @untrustedWrite 403
+        header {
+            Cache-Control "private, no-store"
+            Strict-Transport-Security "max-age=31536000"
+            X-Content-Type-Options nosniff
+            Referrer-Policy no-referrer
+        }
+        @backend path /api/* /docs /docs/* /redoc
+        reverse_proxy @backend {$BACKEND_UPSTREAM:127.0.0.1:8000} {
+            header_up -Authorization
+            header_up -Origin
+        }
+        reverse_proxy {$FRONTEND_UPSTREAM:127.0.0.1:3000} {
+            header_up -Authorization
+        }
+    }
+}

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.core.database import get_db
 from app.schemas.live_analysis import (
     LiveAnalysisRequest,
@@ -18,6 +19,7 @@ from app.services.breakout_entry import BreakoutEntryAdvisor
 from app.services.validator import CandleValidator
 from app.services.egx_calendar import get_expected_latest_completed_session
 from app.models.candle import EGXCandle
+from app.models.candle_revision import CandleRevision
 
 router = APIRouter()
 
@@ -74,31 +76,26 @@ def save_manual_eod(req: ManualEODRequest, db: Session = Depends(get_db)):
         .first()
     )
 
-    if existing:
-        existing.open = req.open
-        existing.high = req.high
-        existing.low = req.low
-        existing.close = req.close
-        existing.volume = req.volume
-        existing.actual_provider = "USER_VERIFIED_EOD"
-        existing.validation_status = validated["validation_status"]
-    else:
-        db.add(
-            EGXCandle(
-                ticker=sec.ticker,
-                session_date=req.session_date,
-                open=req.open,
-                high=req.high,
-                low=req.low,
-                close=req.close,
-                volume=req.volume,
-                actual_provider="USER_VERIFIED_EOD",
-                validation_status=validated["validation_status"],
-            )
-        )
-
+    previous = existing.to_dict() if existing else None
+    after = {**raw_bar, "validation_status": validated["validation_status"]}
+    conflict = "بيانات الجلسة اتغيرت. حدّث الصفحة وراجع القيم قبل إعادة المحاولة."
     try:
+        if previous != after:
+            if previous is None:
+                db.add(EGXCandle(**after))
+            else:
+                updated = db.query(EGXCandle).filter_by(**previous).update(after, synchronize_session="fetch")
+                if updated != 1:
+                    db.rollback()
+                    raise HTTPException(status_code=409, detail=conflict)
+            db.add(CandleRevision(ticker=sec.ticker, session_date=req.session_date,
+                                  reason="MANUAL_EOD", before=previous, after=after))
         db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=conflict)
+    except HTTPException:
+        raise
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="تعذر حفظ بيانات الجلسة يدويًا.")

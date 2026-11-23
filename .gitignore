@@ -30,3 +30,14 @@ Thumbs.db
 coverage/
 dist/
 build/
+# Private runtime stores and SQLite backup/transaction files
+instance/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+*.db-*
+*.sqlite-*
+*.sqlite3-*
+.egx-backup-*
+*.tsbuildinfo

@@ -1,5 +1,6 @@
 import datetime
 from typing import List, Optional
+from itertools import groupby
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -18,7 +19,8 @@ from app.services.egx_calendar import (
 from app.models.candle import EGXCandle
 from app.services.company_profile import get_mbsc_company_profile, get_mpci_company_profile, get_bioc_company_profile
 from app.schemas.stock_plans import StockPlanResponse
-from app.services.stock_plans import StockPlansService, completed_analytical_bars
+from app.services.stock_plans import StockPlansService
+from app.services.validator import completed_analytical_bars
 
 router = APIRouter()
 
@@ -39,35 +41,27 @@ def get_all_stocks(
     expected_session = get_expected_latest_completed_session()
     expected_session_str = expected_session.isoformat()
 
+    candles = (db.query(EGXCandle)
+               .filter(EGXCandle.ticker.in_([s.ticker for s in securities]),
+                       EGXCandle.session_date <= expected_session_str)
+               .order_by(EGXCandle.ticker, EGXCandle.session_date).yield_per(500))
+    summaries = {}
+    for ticker, rows in groupby(candles, key=lambda row: row.ticker):
+        history = completed_analytical_bars((row.to_dict() for row in rows), expected_session, ticker)
+        if history:
+            if default_provider_manager.suspect_cached_tail(history):
+                history.pop()
+            summaries[ticker] = (history[-1], len(history))
+
     items = []
     for s in securities:
         sec_dict = s.to_dict()
-        
-        last_candle = (
-            db.query(EGXCandle)
-            .filter(EGXCandle.ticker == s.ticker)
-            .order_by(EGXCandle.session_date.desc())
-            .first()
-        )
-        if last_candle:
-            latest_date = datetime.date.fromisoformat(last_candle.session_date)
-            sessions_behind = calculate_sessions_behind(latest_date)
-            freshness_ar = get_freshness_display_ar(sessions_behind)
-            latest_close = last_candle.close
-            latest_session = last_candle.session_date
-            actual_provider = last_candle.actual_provider
-            analytical_bars_count = (
-                db.query(EGXCandle)
-                .filter(EGXCandle.ticker == s.ticker)
-                .count()
-            )
-        else:
-            sessions_behind = None
-            freshness_ar = "غير متاح"
-            latest_close = None
-            latest_session = None
-            actual_provider = None
-            analytical_bars_count = 0
+        latest, analytical_bars_count = summaries.get(s.ticker, ({}, 0))
+        latest_close = latest.get("close")
+        latest_session = latest.get("session_date")
+        actual_provider = latest.get("actual_provider")
+        sessions_behind = calculate_sessions_behind(datetime.date.fromisoformat(latest_session)) if latest_session else None
+        freshness_ar = get_freshness_display_ar(sessions_behind)
 
         sec_dict["latest_close"] = latest_close
         sec_dict["latest_session_date"] = latest_session

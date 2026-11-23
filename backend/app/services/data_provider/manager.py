@@ -7,7 +7,7 @@ from app.services.data_provider.directfn_provider import DirectFNCompletedSessio
 from app.services.data_provider.investing_provider import InvestingHistoricalProvider
 from app.services.data_provider.investing_legacy_provider import InvestingLegacySearchProvider
 from app.services.data_provider.stooq_provider import StooqEGXProvider
-from app.services.validator import CandleValidator
+from app.services.validator import CandleValidator, completed_analytical_bars
 from app.services.egx_calendar import (
     get_expected_latest_completed_session,
     calculate_sessions_behind,
@@ -17,6 +17,7 @@ from app.services.egx_calendar import (
     CAIRO_TZ,
 )
 from app.models.candle import EGXCandle
+from app.models.candle_revision import CandleRevision
 from app.models.security import EGXSecurity
 
 
@@ -53,6 +54,12 @@ class ProviderManager:
         if prev <= 0 or close <= 0:
             return True
         return abs(close / prev - 1.0) > cls.MAX_UNCORROBORATED_CLOSE_MOVE
+
+    @classmethod
+    def suspect_cached_tail(cls, bars):
+        if len(bars) < 2 or bars[-1]["actual_provider"] == "USER_VERIFIED_EOD":
+            return False
+        return cls._is_large_close_jump(bars[-2]["close"], bars[-1])
 
     @classmethod
     def _bars_corroborate(cls, first: Dict[str, Any], second: Dict[str, Any]) -> bool:
@@ -158,11 +165,10 @@ class ProviderManager:
                 if missing_bar is None:
                     continue
 
-                validated_missing = CandleValidator.validate_bar(missing_bar)
-                if validated_missing.get("hlcv_status") != "VALID":
+                matching = completed_analytical_bars([missing_bar], datetime.date.fromisoformat(session_date), ticker)
+                if not matching or matching[0]["session_date"] != session_date:
                     continue
-                if validated_missing.get("session_date") != session_date:
-                    continue
+                validated_missing = matching[0]
 
                 previous_close = best_bars[-1].get("close") if best_bars else None
                 if self._is_large_close_jump(previous_close, validated_missing):
@@ -212,6 +218,7 @@ class ProviderManager:
         cached_baseline_provider: Optional[str] = None
         cached_baseline_sessions_behind: Optional[int] = None
 
+        suspect = None
         if db is not None and not force_refresh:
             cached_rows = (
                 db.query(EGXCandle)
@@ -220,62 +227,41 @@ class ProviderManager:
                 .all()
             )
 
-            # Repair a previously cached single-source outlier at the tail. A
-            # user-verified EOD candle is intentionally not deleted here.
-            if len(cached_rows) >= 2:
-                last_cached = cached_rows[-1]
-                previous_cached = cached_rows[-2]
-                is_user_verified = last_cached.actual_provider == "USER_VERIFIED_EOD"
-                if (
-                    not is_user_verified
-                    and self._is_large_close_jump(previous_cached.close, last_cached.to_dict())
-                ):
-                    if not allow_network:
-                        # A directory read may ignore a suspect tail without deleting it.
-                        cached_rows = cached_rows[:-1]
-                    else:
-                        try:
-                            db.delete(last_cached)
-                            db.commit()
-                            cached_rows = cached_rows[:-1]
-                        except Exception:
-                            db.rollback()
+            cached_validated = completed_analytical_bars(
+                (row.to_dict() for row in cached_rows), expected_session, clean_ticker
+            )[-limit:]
+            # Quarantine a suspect tail in memory. Keep the underlying market history.
+            if self.suspect_cached_tail(cached_validated):
+                suspect = cached_validated.pop()
+            if cached_validated:
+                cached_baseline_bars = cached_validated
+                cached_baseline_provider = cached_validated[-1]["actual_provider"]
+                cached_latest_date = datetime.date.fromisoformat(
+                    cached_validated[-1]["session_date"]
+                )
+                cached_baseline_sessions_behind = calculate_sessions_behind(
+                    cached_latest_date,
+                    now_cairo,
+                )
 
-            if cached_rows:
-                cached_raw = [c.to_dict() for c in cached_rows[-limit:]]
-                cached_validated = CandleValidator.validate_bars(cached_raw)
-                cached_validated = [
-                    b for b in cached_validated if b.get("hlcv_status") == "VALID"
-                ]
-                if cached_validated:
-                    cached_baseline_bars = cached_validated
-                    cached_baseline_provider = cached_rows[-1].actual_provider
-                    cached_latest_date = datetime.date.fromisoformat(
-                        cached_validated[-1]["session_date"]
-                    )
-                    cached_baseline_sessions_behind = calculate_sessions_behind(
-                        cached_latest_date,
-                        now_cairo,
-                    )
-
-                    if cached_baseline_sessions_behind == 0 and (len(cached_validated) >= 50 or not allow_network):
-                        has_min_history = len(cached_validated) >= 50
-                        is_eligible = has_min_history
-                        status = "SUCCESS" if is_eligible else "INSUFFICIENT_DATA"
-                        return {
-                            "status": status,
-                            "ticker": clean_ticker,
-                            "actual_provider": cached_baseline_provider,
-                            "raw_bars_count": len(cached_validated),
-                            "analytical_bars_count": len(cached_validated),
-                            "expected_latest_session": expected_session_str,
-                            "latest_available_session": cached_validated[-1]["session_date"],
-                            "sessions_behind": 0,
-                            "freshness": "CURRENT",
-                            "freshness_ar": "محدث",
-                            "current_analysis_eligible": is_eligible,
-                            "bars": cached_validated,
-                        }
+                if cached_baseline_sessions_behind == 0 and (len(cached_validated) >= 50 or not allow_network):
+                    has_min_history = len(cached_validated) >= 50
+                    is_eligible = has_min_history
+                    status = "SUCCESS" if is_eligible else "INSUFFICIENT_DATA"
+                    return {
+                        "status": status,
+                        "ticker": clean_ticker,
+                        "actual_provider": cached_baseline_provider,
+                        "raw_bars_count": len(cached_validated),
+                        "analytical_bars_count": len(cached_validated),
+                        "expected_latest_session": expected_session_str,
+                        "latest_available_session": cached_validated[-1]["session_date"],
+                        "sessions_behind": 0,
+                        "freshness": "CURRENT",
+                        "freshness_ar": "محدث",
+                        "current_analysis_eligible": is_eligible,
+                        "bars": cached_validated,
+                    }
 
         # Start from the local validated history when available, then let fresher
         # public providers replace it. This guarantees we never collapse from
@@ -317,10 +303,7 @@ class ProviderManager:
                 if not raw_p_bars:
                     continue
 
-                val_p_bars = CandleValidator.validate_bars(raw_p_bars)
-                val_p_bars = [
-                    b for b in val_p_bars if b.get("hlcv_status") == "VALID"
-                ]
+                val_p_bars = completed_analytical_bars(raw_p_bars, expected_session, clean_ticker)[-limit:]
                 if not val_p_bars:
                     continue
 
@@ -465,6 +448,20 @@ class ProviderManager:
                             validation_status=b["validation_status"],
                         )
                         db.add(candle_record)
+                    elif suspect and existing.session_date == suspect["session_date"]:
+                        # Compare the original row in the UPDATE itself. A concurrent
+                        # manual edit wins and the journal only records committed repairs.
+                        original = existing.to_dict()
+                        if any(original[key] != suspect.get(key) for key in ("open", "high", "low", "close", "volume", "actual_provider")):
+                            continue
+                        new_values = {key: b[key] for key in ("open", "high", "low", "close", "volume", "validation_status")}
+                        new_values["actual_provider"] = b.get("actual_provider", active_provider)
+                        if any(original[key] != value for key, value in new_values.items()):
+                            changed = db.query(EGXCandle).filter_by(**original).update(new_values, synchronize_session=False)
+                            if changed:
+                                db.add(CandleRevision(ticker=clean_ticker, session_date=existing.session_date,
+                                                      reason="PROVIDER_REPAIR", before=original,
+                                                      after={**original, **new_values}))
                 db.commit()
             except Exception:
                 db.rollback()

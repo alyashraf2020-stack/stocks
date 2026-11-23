@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 from typing import List, Dict, Any, Optional
 import yfinance as yf
 from app.services.data_provider.base import BaseHistoricalProvider
@@ -27,11 +27,11 @@ class YahooEGXProvider(BaseHistoricalProvider):
                 bars.append({
                     "ticker": clean_ticker,
                     "session_date": session_date,
-                    "open": float(row.get("Open", 0.0)),
-                    "high": float(row.get("High", 0.0)),
-                    "low": float(row.get("Low", 0.0)),
-                    "close": float(row.get("Close", 0.0)),
-                    "volume": float(row.get("Volume", 0.0)),
+                    "open": float(row.get("Open", float("nan"))),
+                    "high": float(row.get("High", float("nan"))),
+                    "low": float(row.get("Low", float("nan"))),
+                    "close": float(row.get("Close", float("nan"))),
+                    "volume": float(row.get("Volume", float("nan"))),
                     "actual_provider": self.provider_name,
                     "fetched_at": now_iso
                 })
@@ -64,11 +64,11 @@ class YahooEGXProvider(BaseHistoricalProvider):
                     return {
                         "ticker": clean_ticker,
                         "session_date": session_date,
-                        "open": float(row.get("Open", 0.0)),
-                        "high": float(row.get("High", 0.0)),
-                        "low": float(row.get("Low", 0.0)),
-                        "close": float(row.get("Close", 0.0)),
-                        "volume": float(row.get("Volume", 0.0)),
+                        "open": float(row.get("Open", float("nan"))),
+                        "high": float(row.get("High", float("nan"))),
+                        "low": float(row.get("Low", float("nan"))),
+                        "close": float(row.get("Close", float("nan"))),
+                        "volume": float(row.get("Volume", float("nan"))),
                         "actual_provider": self.provider_name,
                         "fetched_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
                     }

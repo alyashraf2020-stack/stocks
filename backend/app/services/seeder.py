@@ -1,8 +1,8 @@
-﻿import json
+import json
 import os
 import datetime
 from sqlalchemy.orm import Session
-from app.core.database import SessionLocal, Base, engine
+from app.core.database import SessionLocal, Base
 from app.models.security import EGXSecurity
 from app.models.candle import EGXCandle
 from app.models.security_data_correction import SecurityDataCorrection
@@ -33,7 +33,7 @@ def _correct_bioc_identity(db: Session, item, previously_existed: bool):
     security.indices = json.dumps(item.get("indices", []), ensure_ascii=False)
 
 def seed_security_master(db: Session) -> int:
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=db.get_bind())
     # Backfill new listings even when the database was seeded previously.
     existing_tickers = {row[0] for row in db.query(EGXSecurity.ticker).all()}
     bioc_previously_existed = "BIOC" in existing_tickers

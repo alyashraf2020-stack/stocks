@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 from typing import Optional, Set
 import zoneinfo
 
@@ -119,7 +119,9 @@ def calculate_sessions_behind(latest_session: Optional[datetime.date], as_of: Op
         return None
     
     expected_session = get_expected_latest_completed_session(as_of)
-    if latest_session >= expected_session:
+    if latest_session > expected_session or not is_egx_trading_day(latest_session):
+        return None
+    if latest_session == expected_session:
         return 0
 
     sessions_count = 0

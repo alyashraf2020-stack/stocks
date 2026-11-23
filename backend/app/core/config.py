@@ -1,6 +1,11 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from typing import Dict
+from pathlib import Path
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+LEGACY_DATABASE = BACKEND_ROOT / "egx_platform.db"
+RUNTIME_DATABASE = BACKEND_ROOT / "instance" / "egx_platform.db"
 
 
 class Settings(BaseSettings):
@@ -8,7 +13,8 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # Database
-    DATABASE_URL: str = "sqlite:///./egx_platform.db"
+    DATABASE_URL: str = f"sqlite:///{RUNTIME_DATABASE.as_posix()}"
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     # Risk Management Rules (Fixed and Strict)
     MAX_RISK_PER_TRADE_PCT: float = 0.015

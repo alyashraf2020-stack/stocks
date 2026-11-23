@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional, List
+from typing import Optional, List, Literal
 from app.schemas.analysis import TradePlanResponse
 
 
@@ -11,8 +11,8 @@ class LiveAnalysisRequest(BaseModel):
     buy_price: Optional[float] = Field(None, gt=0, allow_inf_nan=False, description="Purchase price in EGP if already owned")
     shares_owned: Optional[int] = Field(None, ge=1, strict=True, description="Number of shares held if already owned")
     add_on_cash: Optional[float] = Field(None, ge=0, allow_inf_nan=False, description="Cash available for this add-on, included in total portfolio value")
-    bid_depth_qty: Optional[float] = Field(None, ge=0, description="Optional total buy-side depth from broker screen")
-    ask_depth_qty: Optional[float] = Field(None, ge=0, description="Optional total sell-side depth from broker screen")
+    bid_depth_qty: Optional[float] = Field(None, ge=0, allow_inf_nan=False, description="Optional total buy-side depth from broker screen")
+    ask_depth_qty: Optional[float] = Field(None, ge=0, allow_inf_nan=False, description="Optional total sell-side depth from broker screen")
 
     @model_validator(mode="after")
     def cash_within_portfolio(self):
@@ -24,11 +24,11 @@ class LiveAnalysisRequest(BaseModel):
 class ManualEODRequest(BaseModel):
     ticker: str = Field(..., description="EGX ticker")
     session_date: str = Field(..., description="Completed EGX session date in YYYY-MM-DD")
-    open: float = Field(..., gt=0)
-    high: float = Field(..., gt=0)
-    low: float = Field(..., gt=0)
-    close: float = Field(..., gt=0)
-    volume: float = Field(..., ge=0)
+    open: float = Field(..., gt=0, allow_inf_nan=False)
+    high: float = Field(..., gt=0, allow_inf_nan=False)
+    low: float = Field(..., gt=0, allow_inf_nan=False)
+    close: float = Field(..., gt=0, allow_inf_nan=False)
+    volume: float = Field(..., ge=0, allow_inf_nan=False)
 
 
 class ManualEODResponse(BaseModel):
@@ -136,6 +136,8 @@ class BreakoutEntryResponse(BaseModel):
 
 
 class LiveAnalysisResponse(BaseModel):
+    current_price_source: Literal["MANUAL_INPUT"] = "MANUAL_INPUT"
+    executable_quote_verified: Literal[False] = False
     ticker: str
     current_price: float
     decision: str

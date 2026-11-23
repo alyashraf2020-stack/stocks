@@ -12,25 +12,9 @@ from app.services.egx_calendar import get_expected_latest_completed_session, cal
 from app.services.indicators import TechnicalIndicatorEngine
 from app.services.trade_plan import TradePlanEngine
 from app.services.technical_rating import TechnicalRatingEngine
+from app.services.validator import completed_analytical_bars
 
 logger = logging.getLogger(__name__)
-
-
-def completed_analytical_bars(raw_bars, expected, ticker):
-    by_date = {}
-    for bar in raw_bars:
-        try:
-            date = datetime.date.fromisoformat(bar["session_date"])
-            high, low, close, volume = [float(bar[key]) for key in ("high", "low", "close", "volume")]
-            valid = (all(math.isfinite(value) for value in (high, low, close, volume)) and
-                     0 < low <= close <= high and volume >= 0 and
-                     bar.get("hlcv_status") != "INVALID" and bar.get("validation_status") != "INVALID" and
-                     bar.get("ticker", ticker) == ticker)
-            if date <= expected and is_egx_trading_day(date) and valid:
-                by_date.setdefault(date, bar)
-        except (KeyError, ValueError, TypeError):
-            continue
-    return [by_date[date] for date in sorted(by_date)]
 
 
 def valid_levels(plan):

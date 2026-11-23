@@ -30,12 +30,17 @@ class FakeProvider(BaseHistoricalProvider):
 
 def make_bars(last_session: str, count: int = 60, base: float = 100.0):
     end = datetime.date.fromisoformat(last_session)
+    from app.services.egx_calendar import is_egx_trading_day
+    sessions = []
+    while len(sessions) < count:
+        if is_egx_trading_day(end):
+            sessions.append(end)
+        end -= datetime.timedelta(days=1)
     bars = []
-    for i in range(count):
-        d = end - datetime.timedelta(days=(count - 1 - i))
+    for i, d in enumerate(reversed(sessions)):
         close = base + (i * 0.10)
         bars.append({
-            "ticker": "TEST",
+            "ticker": "EGAL",
             "session_date": d.isoformat(),
             "open": close - 0.05,
             "high": close + 0.20,

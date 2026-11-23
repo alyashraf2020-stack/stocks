@@ -137,6 +137,21 @@ def test_suspect_cached_tail_is_ignored_without_deleting_it(db):
     assert db.query(EGXCandle).count() == 60
     default_provider_manager._fetch_provider_bars.assert_not_called()
 
+    # A successful refresh can replace the quarantined value and preserve its history.
+    from app.models.candle_revision import CandleRevision
+    provider = Mock(provider_name="Verified fixture")
+    repaired = bars()
+    provider.fetch_historical_bars.return_value = repaired
+    manager = manager_module.ProviderManager(primary_provider=provider)
+    result = manager.get_analytical_bars("COMI", db=db)
+    assert result["status"] == "SUCCESS"
+    db.expire_all()
+    assert db.query(EGXCandle).filter_by(ticker="COMI", session_date=EXPECTED.isoformat()).one().close == repaired[-1]["close"]
+    revision = db.query(CandleRevision).one()
+    assert revision.reason == "PROVIDER_REPAIR"
+    assert revision.before["close"] == 300
+    assert revision.after["close"] == repaired[-1]["close"]
+
 
 def test_inactive_stock_is_visible_without_a_trade_plan(db):
     sec = security(db, status="SUSPENDED")

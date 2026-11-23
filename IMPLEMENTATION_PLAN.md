@@ -52,3 +52,31 @@ Public accessibility does not establish rights for commercial reuse or ongoing r
 | 9 | Deploy separate long-running services with persistent storage, backups, monitoring and secrets. Consider PostgreSQL before multiple writers. | Restore drill, regression, security and data-entitlement review. Select host, budget, official feeds and notification accounts before deployment. |
 
 Cost drivers for a later deployment are an always-on service and persistent storage, market-data entitlements, optional message delivery and OpenAI input/output tokens. This increment provisions no paid resources. A credible monthly estimate requires a selected host, usage budget and provider quotation.
+
+## Official tools to verify against the account in phase 2
+
+| Operation | Documented surface | Condition to implement |
+| --- | --- | --- |
+| Portfolio, available cash, trades and orders | Account and portfolio reads after the owner selects scopes | Inspect actual payload fields for cost basis, realized P&L and pending orders. Unknown fields stay unavailable. |
+| Watchlist and market context | get_watchlist, get_market_status, get_market_watch, get_assets_info, get_price_history | Instrument info includes a delayed price. Bid/ask snapshots do not demonstrate executable freshness or Level-2 entitlement. |
+| Fees and dividends | calculate_order_fees, get_asset_dividends | Preserve provider time, units and instrument identity. Revalidate fees per proposal. |
+| Trade proposals and outstanding orders | Trade proposal tools are rolling out. cancel_order is a separate write. | Read-only by default. Never submit a proposal, cancel an open order or request a savings transfer while testing. Each real change requires explicit user approval. |
+
+The existing live-analysis endpoint accepts manual prices and can return a conditional decision such as DO_NOT_CHASE. Its decisions lack an intraday entitlement and its guards are not sufficient for order approval. The plans service separately blocks inactive securities. Introduce one shared trading-restriction check before adding proposals. Market calendars currently embed closure dates through 2026 and a fixed regular close. Verify special hours and newly announced closures before unattended scans.
+
+## Phase 1 implementation and checks
+
+The gateway uses Caddy's bcrypt owner authentication over HTTPS for the UI and API. It validates the Origin of writes and strips owner credentials before proxying. A protected ingress is required for hosting. The local loopback API retains its previous calling convention. The frontend can use its existing build-time API setting for same-origin access. No frontend redesign was required.
+
+The market snapshot retains its original Git blob. The writable default lives in backend/instance. The correction journal is additive and committed atomically with candle changes. One previous test fixture supplied a TEST ticker for an EGAL request and included weekends while claiming 60 trading sessions. Its inputs now use EGAL and 60 trading dates; the original fallback expectations remain.
+
+| Verification | Observed result |
+| --- | --- |
+| Controlled provider outage after startup | Before 208 passed / 9 failed / 1 skipped. After 231 passed / 9 failed / 1 skipped. Identical failing test IDs. |
+| Normal network after startup | Before 210 passed / 7 failed / 1 skipped. After 233 passed / 7 failed / 1 skipped. The seven failing IDs match: two tests require Yahoo even when Investing supplies a fallback, one requires 200 indicator sessions, one omits DO_NOT_CHASE from its allowed API responses, and three are the decision assertions above. The skipped fixture is an overextended synthetic setup. Provider responses can vary by run. |
+| Frontend | TypeScript and the production build passed before and after. The hosted build used /api/v1. |
+| Storage | Repeated migration preserved all rows of both original tables. Concurrent backup tests produced one complete copy. The tracked SQLite SHA-256 matched the base revision. |
+| Private access | Caddy 2.11.9 passed authentication, rejection of missing/foreign Origin, verified local TLS, credential stripping and cache checks. A second smoke run used the real built Next.js server and FastAPI. The authenticated directory and AMES lookup returned 200. A trusted-origin malformed write reached input validation (422), an untrusted write was rejected. |
+| Availability | No brokerage credentials, market-data entitlement or model key were used. Deployment, continuous monitoring and broker approval remain future work. |
+
+Files added include README.md, ARCHITECTURE.md, CHANGELOG.md, IMPLEMENTATION_PLAN.md, .env.example, deploy/Caddyfile, backend/requirements*.txt, backend/pytest.ini, the Alembic environment and first revision, core/sqlite_backup.py, models/candle_revision.py and the data-foundation and HTTPS gateway tests. Existing changes cover core configuration and database setup, the FastAPI app, stock/market/manual-analysis routes and schemas, seeding, validation, calendar, provider manager and Yahoo volume handling, stock plans, relevant tests and Git ignore rules.
