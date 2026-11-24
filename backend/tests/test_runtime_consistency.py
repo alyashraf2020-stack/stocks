@@ -4,6 +4,7 @@ from app.main import app
 from app.core.database import SessionLocal
 from app.services.security_master import SecurityMasterService
 
+pytestmark = pytest.mark.usefixtures("local_market")
 client = TestClient(app)
 
 def test_kora_search_provenance():

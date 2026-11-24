@@ -16,10 +16,12 @@ https://{$APP_HOST} {
         }
         @backend path /api/* /docs /docs/* /redoc
         reverse_proxy @backend {$BACKEND_UPSTREAM:127.0.0.1:8000} {
+            header_up X-EGX-Gateway "{$INTEGRATIONS_GATEWAY_SECRET:unconfigured}"
             header_up -Authorization
             header_up -Origin
         }
         reverse_proxy {$FRONTEND_UPSTREAM:127.0.0.1:3000} {
+            header_up -X-EGX-Gateway
             header_up -Authorization
         }
     }

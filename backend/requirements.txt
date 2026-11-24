@@ -9,3 +9,8 @@ SQLAlchemy==2.1.9
 tzdata==2026.6
 uvicorn==0.54.0
 yfinance==1.8.0
+mcp==1.30.0
+sse-starlette==3.0.3
+httpx==0.28.1
+cryptography==50.0.2
+filelock==4.3.1

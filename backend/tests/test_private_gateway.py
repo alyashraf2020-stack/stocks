@@ -19,13 +19,19 @@ def test_gateway_protects_ui_and_api(tmp_path):
         def do_GET(self):
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"leaked" if self.headers.get("Authorization") else b"ok")
+            if self.headers.get("Authorization"):
+                self.wfile.write(b"leaked")
+            elif self.headers.get("X-EGX-Gateway") == gateway and self.path.startswith("/api/"):
+                self.wfile.write(b"owner")
+            else:
+                self.wfile.write(b"ok")
 
         do_POST = do_GET
 
         def log_message(self, *args):
             pass
 
+    gateway = secrets.token_urlsafe(32)
     caddy = shutil.which("caddy")
     password = secrets.token_urlsafe(24)
     hashed = subprocess.run([caddy, "hash-password"], input=password, text=True, check=True,
@@ -40,7 +46,8 @@ def test_gateway_protects_ui_and_api(tmp_path):
     origin = f"https://{host}"
     env = {**os.environ, "APP_HOST": host, "OWNER_PASSWORD_HASH": hashed,
            "XDG_DATA_HOME": str(tmp_path), "XDG_CONFIG_HOME": str(tmp_path),
-           "BACKEND_UPSTREAM": address, "FRONTEND_UPSTREAM": address}
+           "BACKEND_UPSTREAM": address, "FRONTEND_UPSTREAM": address,
+           "INTEGRATIONS_GATEWAY_SECRET": gateway}
     source = Path(__file__).resolve().parents[2] / "deploy" / "Caddyfile"
     config = tmp_path / "Caddyfile"
     config.write_text("{\n admin off\n auto_https disable_redirects\n skip_install_trust\n}\n" + source.read_text())
@@ -64,11 +71,15 @@ def test_gateway_protects_ui_and_api(tmp_path):
                 assert client.get(path).status_code == 401
                 assert client.get(path, auth=("owner", "incorrect")).status_code == 401
                 response = client.get(path, auth=("owner", password))
-                assert response.text == "ok" and "no-store" in response.headers["Cache-Control"]
+                assert response.text == ("owner" if path.startswith("/api/") else "ok")
+                assert "no-store" in response.headers["Cache-Control"]
+            headers = {"X-EGX-Gateway": "from-browser"}
+            assert client.get("/portfolio", auth=("owner", password), headers=headers).text == "ok"
+            assert client.get("/api/v1/integrations/thndr/status", auth=("owner", password), headers=headers).text == "owner"
             url = "/api/v1/egx/live-analysis/manual-eod"
             for headers in ({}, {"Origin": "https://untrusted.example"}):
                 assert client.post(url, auth=("owner", password), headers=headers).status_code == 403
-            assert client.post(url, auth=("owner", password), headers={"Origin": origin}).text == "ok"
+            assert client.post(url, auth=("owner", password), headers={"Origin": origin}).text == "owner"
     finally:
         process.terminate()
         process.wait(timeout=10)

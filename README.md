@@ -48,3 +48,19 @@ Use a disposable database copy. Never run the network-dependent test suite again
 - IMPLEMENTATION_PLAN.md contains the audit, baseline and phased acceptance criteria.
 - TECHNICAL_DASHBOARD.md and STOCK-PLANS.md describe existing calculations and screens.
 - CHANGELOG.md records this increment.
+
+## Phase 2 · Connect Thndr for read-only access
+
+Use the private HTTPS gateway described above. In the backend service environment, set `THNDR_REDIRECT_URI=https://YOUR_HOST/api/v1/integrations/thndr/callback` with the exact gateway origin. Generate a Fernet key with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` and keep it in `THNDR_ENCRYPTION_KEY` on the backend only. Generate a separate high-entropy random value for `INTEGRATIONS_GATEWAY_SECRET` and give the same value to Caddy and FastAPI through their private service environments. Keep the front and back ends on loopback. If configuring proxy access logs, exclude the OAuth callback query string.
+
+The encrypted state file defaults to `backend/instance/thndr.enc`. Set `THNDR_PRIVATE_DIR` to use another service-owned directory on a local persistent filesystem. Keep its backups and the encryption key in separate private locations. The browser communicates only with the gateway and never receives broker credentials.
+
+Open `/settings/integrations`, choose **ربط ثاندر**, sign in with Thndr and confirm the read tools on your phone. Thndr's OAuth metadata advertises dynamic registration, S256, refresh and revocation. Some clients require Thndr to approve their callback address. If registration or redirect is refused, verify the exact HTTPS callback with Thndr. The supported alternative is [Thndr in ChatGPT](https://docs.thndr.app/clients/chatgpt), where account data stays in that connector. Never reuse another client's registration or export its access token.
+
+Open `/portfolio` and choose **مزامنة المحفظة**. Values are displayed only when the authorized tool provides a recognized, validated field. A missing value stays unavailable. Thndr market prices are treated as delayed or unverified. The timestamp shown beside a quote is its source timestamp. **فصل ثاندر** immediately clears portfolio data from the app and requests upstream revocation. If Thndr is down, local access remains blocked and you can retry revocation.
+
+### Offline regression and external smoke checks
+
+From `backend`, run `python -m pytest -q`. The suite seeds a disposable database and blocks external sockets. Add Caddy to PATH to run the real TLS gateway test. The GitHub Actions job also confines Python and native dependencies to loopback. Frontend checks run `npm run type-check` and build with the same-origin API configuration.
+
+External provider checks are opt-in with `python -m pytest -o addopts='' -m external -q`. They verify real provider behavior, can fail during feed outages or insufficient coverage, and use a disposable database. Brokerage OAuth and account data are mocked in the regression suite. Commissioning the live connection requires the owner's HTTPS deployment, Thndr acceptance of its callback, and owner consent.

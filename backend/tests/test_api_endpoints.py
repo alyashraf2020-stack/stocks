@@ -1,7 +1,8 @@
-﻿import pytest
+import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 
+pytestmark = pytest.mark.usefixtures("local_market")
 client = TestClient(app)
 
 def test_api_root():
@@ -61,7 +62,9 @@ def test_api_live_analysis_valid_stock():
     assert response.status_code == 200
     data = response.json()
     assert data["ticker"] == "COMI"
-    assert data["decision"] in ["ENTER_NOW", "WAIT", "NEAR_ENTRY", "DO_NOT_ENTER", "DATA_NOT_CURRENT", "INSUFFICIENT_DATA"]
+    assert data["decision"] == "DO_NOT_CHASE"
+    assert data["actionable_new_trade"] is False
+    assert data["new_entry_allowed"] is False
     assert "decision_ar" in data
     assert "reason_ar" in data
 

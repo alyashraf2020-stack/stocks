@@ -41,3 +41,7 @@ backups/
 *.sqlite3-*
 .egx-backup-*
 *.tsbuildinfo
+
+# Encrypted Thndr credentials and snapshots, including a custom data directory.
+thndr.enc
+thndr.enc.lock

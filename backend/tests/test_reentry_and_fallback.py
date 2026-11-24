@@ -1,6 +1,5 @@
 import datetime
 
-import pytest
 
 from app.services.data_provider.base import BaseHistoricalProvider
 from app.services.data_provider.manager import ProviderManager
@@ -140,14 +139,16 @@ def test_completed_plan_rolls_into_fresh_reentry_setup():
 
 def test_manual_price_uses_current_reentry_plan_without_becoming_ohlcv():
     bars = make_completed_then_recent_regime_bars()
+    # A completed pullback cools RSI enough for the re-entry fixture.
+    bars[-1].update(open=6.5, close=6.4, high=6.6, low=6.2)
+    bars = TechnicalIndicatorEngine.compute_all_indicators(bars)
     latest_eod_close = bars[-1]["close"]
 
     plan_result = TradePlanEngine.calculate_trade_plan(bars, sessions_behind=0)
     current_plan = plan_result["trade_plan"]
     assert plan_result["previous_plan"] is not None
 
-    if current_plan["plan_status"] == "NO_VALID_SETUP":
-        pytest.skip("Synthetic fixture is overextended under current indicator calculation")
+    assert current_plan["plan_status"] == "ACTIVE"
 
     manual_price = current_plan["entry_zone_max"] + 0.20
     response = LiveDecisionEngine.evaluate(

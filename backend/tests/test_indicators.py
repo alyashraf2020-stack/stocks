@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from app.services.indicators import TechnicalIndicatorEngine
 from app.services.data_provider.manager import default_provider_manager
 
@@ -62,12 +62,14 @@ def test_atr_positive():
     assert last["atr_14"] is not None
     assert last["atr_14"] > 0
 
+@pytest.mark.external
 def test_real_stock_indicators():
     res = default_provider_manager.get_analytical_bars("COMI", limit=250)
     assert res["status"] in ("SUCCESS", "DATA_NOT_CURRENT")
-    assert len(res["bars"]) >= 200
+    assert len(res["bars"]) >= 50  # Longest warm-up used by this snapshot is SMA50.
     enriched = TechnicalIndicatorEngine.compute_all_indicators(res["bars"])
-    assert len(enriched) >= 200
+    assert len(enriched) == len(res["bars"])
+    assert enriched[48]["sma_50"] is None and enriched[49]["sma_50"] is not None
     snapshot = TechnicalIndicatorEngine.get_latest_snapshot(enriched)
     assert snapshot["has_indicators"] is True
     assert snapshot["sma_20"] is not None
@@ -75,3 +77,13 @@ def test_real_stock_indicators():
     assert 0 <= snapshot["rsi_14"] <= 100
     assert snapshot["atr_14"] > 0
     assert snapshot["bb_upper"] > snapshot["bb_lower"]
+
+def test_full_history_indicator_warmups():
+    from tests.test_stock_plans import bars
+    history = bars(count=250)
+    result = TechnicalIndicatorEngine.compute_all_indicators(history)
+    assert len(result) == 250
+    for period in (20, 50):
+        field = f"sma_{period}"
+        assert result[period - 2][field] is None
+        assert result[-1][field] == pytest.approx(sum(b["close"] for b in history[-period:]) / period)

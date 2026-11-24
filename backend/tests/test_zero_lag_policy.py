@@ -1,5 +1,6 @@
 import datetime
 import pytest
+import time_machine
 from app.services.egx_calendar import (
     is_egx_trading_day,
     get_expected_latest_completed_session,
@@ -34,7 +35,10 @@ def test_sessions_behind_0_allows_current_analysis(valid_50_bars):
     # sessions_behind = 0 -> current analysis allowed
     plan = TradePlanEngine.calculate_trade_plan(valid_50_bars, sessions_behind=0)
     assert plan["status"] == "VALID"
-    assert plan["actionable_new_trade"] is True
+    assert plan["current_analysis_eligible"] is True
+    assert plan["trade_plan"]["plan_status"] == "IN_PROGRESS"
+    assert valid_50_bars[-1]["close"] > plan["trade_plan"]["entry_zone_max"]
+    assert plan["actionable_new_trade"] is False
 
     # Price inside entry zone -> ENTER_NOW is permitted
     e_mid = (plan["trade_plan"]["entry_zone_min"] + plan["trade_plan"]["entry_zone_max"]) / 2.0
@@ -119,15 +123,8 @@ class MockPrimaryMissingLatest(BaseHistoricalProvider):
 
     def fetch_historical_bars(self, ticker: str, limit: int = 250):
         # Returns 60 history bars ending at 2026-09-08 (missing latest expected session)
-        bars = []
-        for i in range(60, 0, -1):
-            bars.append({
-                "ticker": ticker,
-                "session_date": f"2026-06-{i:02d}" if i <= 30 else f"2026-07-{(i-30):02d}",
-                "open": 100.0, "high": 105.0, "low": 98.0, "close": 102.0, "volume": 1000.0
-            })
-        bars[-1]["session_date"] = "2026-09-08"
-        return bars
+        from tests.test_stock_plans import bars
+        return bars(ticker=ticker, end=datetime.date(2026, 9, 8), count=60)
 
     def fetch_session_bar(self, ticker: str, session_date: str):
         return None
@@ -164,6 +161,7 @@ class MockFallbackFails(BaseHistoricalProvider):
     def fetch_session_bar(self, ticker: str, session_date: str):
         return None
 
+@time_machine.travel(datetime.datetime(2026, 9, 9, 16, tzinfo=CAIRO_TZ), tick=False)
 def test_primary_missing_latest_plus_fallback_has_it_fallback_accepted():
     primary = MockPrimaryMissingLatest()
     fallback = MockFallbackHasLatest()
@@ -179,6 +177,7 @@ def test_primary_missing_latest_plus_fallback_has_it_fallback_accepted():
     assert "Mock Fallback" in res["actual_provider"]
     assert "actionable_new_trade" not in res
 
+@time_machine.travel(datetime.datetime(2026, 9, 9, 16, tzinfo=CAIRO_TZ), tick=False)
 def test_all_providers_missing_latest_yields_data_not_current():
     primary = MockPrimaryMissingLatest()
     fallback = MockFallbackFails()

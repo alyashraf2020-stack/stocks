@@ -1,10 +1,15 @@
+import pytest
+
+pytestmark = pytest.mark.external
+
 from app.services.data_provider.manager import default_provider_manager
 
 def test_real_provider_data_available_for_core_stock():
     result = default_provider_manager.get_analytical_bars("COMI", limit=100)
     # Under Zero-Session-Lag, status is SUCCESS (if current) or DATA_NOT_CURRENT (if exchange session completed before provider synced)
     assert result["status"] in ("SUCCESS", "DATA_NOT_CURRENT")
-    assert "Yahoo" in result["actual_provider"]
+    assert result["actual_provider"] in {bar["actual_provider"] for bar in result["bars"]}
+    assert all(bar["ticker"] == "COMI" for bar in result["bars"])
     assert result["analytical_bars_count"] >= 50
     assert result["invalid_hlcv_bars"] == 0
     assert result["first_session"] is not None
@@ -38,8 +43,9 @@ def test_investing_fallback_for_kora():
 def test_core_stocks_provider_isolation():
     for ticker in ["COMI", "SWDY", "MASR", "EGAL", "FWRY", "ABUK", "TMGH"]:
         result = default_provider_manager.get_analytical_bars(ticker, limit=100)
-        assert result["status"] == "SUCCESS"
-        assert result["actual_provider"] == "Yahoo Finance EGX"
+        assert result["status"] == "SUCCESS", f"{ticker} returned {result['status']} from {result['actual_provider']}"
+        assert all(bar["ticker"] == ticker for bar in result["bars"])
+        assert result["actual_provider"] in {bar["actual_provider"] for bar in result["bars"]}
         assert result["analytical_bars_count"] >= 50
         assert result["sessions_behind"] == 0
         assert result["current_analysis_eligible"] is True

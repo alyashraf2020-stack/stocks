@@ -25,7 +25,9 @@ def test_trade_plan_geometry(sample_valid_bars):
     # Under Zero-Session-Lag policy, valid trade plan requires sessions_behind == 0
     res = TradePlanEngine.calculate_trade_plan(sample_valid_bars, sessions_behind=0)
     assert res["status"] == "VALID"
-    assert res["actionable_new_trade"] is True
+    assert res["current_analysis_eligible"] is True
+    assert res["trade_plan"]["plan_status"] == "IN_PROGRESS"
+    assert res["actionable_new_trade"] is False
     plan = res["trade_plan"]
     
     stop = plan["stop_loss"]
@@ -158,7 +160,7 @@ def test_kora_regression_targets_completed():
     assert res_non_owner["new_entry_allowed"] is False
     assert res_non_owner["decision"] == "DO_NOT_CHASE"
     assert "لا تدخل الآن" in res_non_owner["decision_ar"]
-    assert "تجاوز جميع أهداف الخطة السابقة" in res_non_owner["reason_ar"]
+    assert "تجاوز جميع أهداف الخطة الحالية" in res_non_owner["reason_ar"]
 
     # 2. Owner at 6.82
     res_owner = LiveDecisionEngine.evaluate(
