@@ -1,4 +1,6 @@
 "use client";
+
+import ScannerNavigation from "@/components/ScannerNavigation";
 import Link from "next/link";
 import AIStockAnalysis from "@/components/AIStockAnalysis";
 import { useEffect, useState } from "react";
@@ -44,6 +46,7 @@ export default function PortfolioPage() {
       <header className="flex flex-wrap justify-between items-end gap-3">
         <div>
           <h1 className="text-3xl font-bold">محفظتي في ثاندر</h1>
+      <ScannerNavigation />
           <p className="text-gray-400 mt-2">
             آخر مزامنة بتوقيت القاهرة · {dateLabel(data?.last_sync ?? null)}
           </p>

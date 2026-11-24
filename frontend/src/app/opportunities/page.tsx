@@ -1,5 +1,8 @@
 "use client";
 
+import ScannerNavigation from "@/components/ScannerNavigation";
+import ScannerResults from "@/components/ScannerResults";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AnalysisCard } from "@/components/AIStockAnalysis";
@@ -43,6 +46,7 @@ export default function OpportunitiesPage() {
   return (
     <section dir="rtl" className="space-y-4">
       <h1 className="text-3xl font-bold">الفرص للمراجعة</h1>
+      <ScannerNavigation />
       <Link href="/sharia" className="text-primary underline">حالة الفحص الشرعي والوضع الإسلامي</Link>
       <p className="text-sm text-gray-400">
         ترتيب حسابي مبني على آخر جلسة مكتملة وخطط الدخول المتاحة.
@@ -91,6 +95,7 @@ export default function OpportunitiesPage() {
           <AnalysisCard analysis={row.analysis} />
         </details>
       ))}
+      <ScannerResults />
     </section>
   );
 }

@@ -37,9 +37,10 @@ def update_settings(policy: RiskPolicy, db: DB):
 
 
 def size_from_analysis(
-    db, security, analysis, snapshot, sectors, policy, source, *, adding=False
+    db, security, analysis, snapshot, sectors, policy, source, *, adding=False,
+    screening_status=None, as_of=None,
 ):
-    status = status_for(db, security)["status"] if policy.islamic_mode else None
+    status = (screening_status or status_for(db, security)["status"]) if policy.islamic_mode else None
     blockers = entry_blocks(policy, status, advanced_supported=True)
     if (
         not analysis.levels
@@ -74,7 +75,7 @@ def size_from_analysis(
         if analysis.mean_volume is not None
         else None,
     )
-    return calculate_size(candidate, snapshot, sectors, policy, source, status)
+    return calculate_size(candidate, snapshot, sectors, policy, source, status, now=as_of)
 
 
 @router.post("/review")

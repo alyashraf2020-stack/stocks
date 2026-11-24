@@ -27,3 +27,11 @@
 - Added owner risk policy, Decimal sizing, cost and gap estimates, exposure and historical valuation checks, and review-only holding scenarios.
 - Added EGX-methodology screening with dated sources, expiry, explicit unknown results, and independent index membership evidence.
 - Integrated risk and Islamic entry gates with analysis and rankings, and added the Arabic portfolio risk and screening pages.
+
+## Phase 5 · Market scanner and alerts
+
+- Added a standalone SQLite scheduler, fenced worker leases, heartbeats, recovery, bounded evaluation and scanner history.
+- Added cache-only completed-session scans for the market, watchlist, manual holdings or authorized Thndr holdings, with independent delayed-quote observations and checked calendar coverage.
+- Added risk and Sharia publication gates, deterministic signal transitions, optional budgeted AI interpretation and transactional in-app alerts.
+- Added Arabic scanner, watchlist, notification and settings pages, and integrated results with opportunities and existing owner pages.
+- Added an external delivery adapter boundary. Telegram and licensed intraday ingestion remain pending.

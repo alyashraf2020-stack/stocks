@@ -18,6 +18,7 @@ export default function Navbar() {
   }, []);
 
   const navLinks = [
+    { href: "/scanner", label: "الماسح", icon: BarChart3 },
     { href: "/", label: "اليوم", icon: Clock },
     { href: "/stocks", label: "الأسهم", icon: Compass },
     { href: "/plans", label: "خطط كل الأسهم", icon: ListChecks },

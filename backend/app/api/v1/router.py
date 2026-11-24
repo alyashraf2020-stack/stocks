@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import stocks, live_analysis, market, stock_plans, integrations, ai_trading, risk, sharia
+from app.api.v1.endpoints import stocks, live_analysis, market, stock_plans, integrations, ai_trading, risk, sharia, scanner, notifications
 
 api_router = APIRouter()
 api_router.include_router(stocks.router, prefix="/egx/stocks", tags=["EGX Stocks"])
@@ -10,3 +10,5 @@ api_router.include_router(integrations.router, tags=["Thndr read-only integratio
 api_router.include_router(ai_trading.router, tags=["AI trading analysis"])
 api_router.include_router(risk.router, tags=["Portfolio risk"])
 api_router.include_router(sharia.router, tags=["Sharia screening"])
+api_router.include_router(scanner.router, tags=["Market scanner"])
+api_router.include_router(notifications.router, tags=["Scanner notifications"])

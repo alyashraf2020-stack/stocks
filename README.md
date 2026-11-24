@@ -95,3 +95,49 @@ Manual values are in EGP. Enter gross **settled** cash before buy-order reservat
 Open `/sharia` to review or record dated evidence against an ISIN. Confirm the instrument is a common stock, then cite the issuer's published activity and latest available statements as well as the review-period average market value, using comparable units and currency. The app calculates the August 2025 EGX33 activity and financial screens at **5%, 33%, 33%, and 70%**. It uses a strict admission screen and separate dated index-membership evidence. Review records expire after 183 days, and statements more than 365 days old fail the currency check for the app's screen. Membership alone cannot satisfy the screen. The owner is responsible for verifying each source and value before recording it. The app provides an evidence-based classification, without issuing a religious ruling. [EGX methodology](https://beta.egx.com.eg/api/media/uploads/EGX_33_Shariah_Index_4_aug_2025_3ee293dea8.pdf)
 
 Enable Islamic mode in the risk policy to exclude unverified or failed screenings from opportunity rankings and block new-entry and add-on proposals. Existing holdings remain visible for review. Historical levels and analysis are informational. Phase 4 continues to return non-executable scenarios.
+
+## Phase 5 · Background scanner and in-app alerts
+
+Run the scanner as a separate service on the same host. Use the same private SQLite database and Python environment as FastAPI. SQLite should be on a local disk owned by the service account. Upgrade a backed-up database before starting either service.
+
+```sh
+cd backend
+python -m pip install -r requirements-dev.txt
+python -m alembic upgrade head
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+In another terminal with the same backend environment:
+
+```sh
+cd backend
+python -m app.workers.scanner_worker
+```
+
+Build and run the frontend with Node 22 from the repository root:
+
+```sh
+cd frontend
+npm ci
+NEXT_PUBLIC_API_URL=/api/v1 npm run build
+npm run start -- --hostname 127.0.0.1
+```
+
+Use the existing Caddy HTTPS gateway for all owner pages. Open `/settings/scanner` to select market, watchlist, manual portfolio or Thndr. In `/watchlist`, enter the prioritized stock symbols. To use manual holdings, enter a dated snapshot in `/risk`, choose **حفظ لقطة المحفظة اليدوية للماسح**, then select manual portfolio mode in the scanner settings. Thndr mode uses only holdings from the existing authorized sync and verifies the read grant before use. To refresh holdings, choose **مزامنة المحفظة** on `/portfolio`. A revoked, expired or unavailable grant blocks broker monitoring. The two portfolio sources are kept separate.
+
+Open `/scanner` to enable or pause automatic scheduling, request a manual run, inspect the heartbeat and review history. A manually queued scan can run while automatic scheduling is paused. A stopped browser or frontend leaves scanning active while the worker is alive. In `/notifications`, read or acknowledge alerts. Critical stop-policy alerts are always eligible. Old entry alerts are historical observations that require a new review. `/opportunities` includes filterable categories, blocked candidates and missing-symbol diagnostics.
+
+| Worker setting | Default and behavior |
+| --- | --- |
+| `SCANNER_ENABLED` | `false`. Environmental initial default, overridden by saved owner settings. |
+| `SCANNER_INTERVAL_SECONDS` | `0`. One EOD window per session and settings revision, eligible 15 minutes after scheduled close. Run manually after a late import. Values of 60, 300, 900 and 1800 require a licensed intraday source. |
+| `SCANNER_MAX_CONCURRENCY`, `SCANNER_MAX_SYMBOLS_PER_SCAN` | 1 local evaluator and 500 symbols. Watchlist symbols get priority in market mode. Holdings are prioritized in either dedicated portfolio mode. |
+| `SCANNER_LEASE_SECONDS`, `SCANNER_HEARTBEAT_SECONDS`, `SCANNER_JOB_TIMEOUT_SECONDS` | 60-second lease, five-second heartbeat and five-minute computation deadline. |
+| `SCANNER_THNDR_MIN_INTERVAL_SECONDS` | 300 seconds between authorized grant checks across workers, plus Thndr's existing provider cooldown. |
+| `SCANNER_AI_ENABLED`, `SCANNER_MAX_AI_REQUESTS_PER_SCAN` | Off, at most two ranked new contexts per scan when explicitly enabled. The existing OpenAI ledger, budget, cadence and retries still apply. |
+| `ALERT_COOLDOWN_SECONDS`, `SCANNER_HISTORY_RETENTION_DAYS` | Six-hour category/symbol cooldown and 30-day scanner history. Entry alerts expire after one day, other alerts after seven. |
+| `TELEGRAM_ENABLED` | Disabled. The persistent outbox is available. Telegram transport, destination validation and test delivery are deferred to Phase 7. Do not configure a token or chat ID for this release. |
+
+The worker reads cached market data only. Refresh/import licensed EOD data using an authorized process separately from scanning. A date without its valid completed-session candle is unavailable under zero-session-lag. Delayed Thndr quotes stay separate from EOD results and serve only as review observations. The 2026 calendar is an analytical schedule with explicit Cairo coverage and special closures. An exchange halt or unexpected closure needs a reviewed override. The schedule alone does not verify an open live session. Review updated exchange notices before extending coverage.
+
+For managed operation, supervise the worker with your service manager and capture stdout and stderr. With a service named `egx-scanner`, use `journalctl -u egx-scanner -f` and check the heartbeat on `/scanner`. Restart the same command against the same database after an outage. Expired jobs recover automatically within the persisted attempt limit. Terminal failures remain in history and can be retried with a new manual run. Keep backups of the private database and OpenAI ledger outside Git. API routes and request schemas appear under `/docs` through the private gateway.

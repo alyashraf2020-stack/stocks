@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import ScannerNavigation from "@/components/ScannerNavigation";
+import { ScannerSettings, scannerRequest } from "@/lib/scanner";
 import { formatRisk, Numeric, ownerRequest, Policy, reason } from "@/lib/risk";
 
 type Metrics = Record<string, Numeric>;
@@ -192,7 +194,14 @@ export default function RiskPage() {
     setResult(null);
     setError("");
     try {
-      setResult(await ownerRequest<Review>("risk/review", request));
+      const button = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+      if (button?.value === "scanner" && request.manual) {
+        const settings = await scannerRequest<ScannerSettings>("scanner/settings");
+        await scannerRequest("scanner/settings", { ...settings, manual: request.manual });
+        setNotice("اتحفظت لقطة المحفظة اليدوية. اختار وضع المحفظة اليدوية من إعدادات الماسح.");
+      } else {
+        setResult(await ownerRequest<Review>("risk/review", request));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "تعذّر حساب المخاطر.");
     } finally {
@@ -202,6 +211,7 @@ export default function RiskPage() {
   return (
     <section className="max-w-6xl mx-auto space-y-5" dir="rtl">
       <h1 className="text-3xl font-bold">مخاطر المحفظة</h1>
+      <ScannerNavigation />
       <Link className="text-primary underline" href="/sharia">
         الفحص الشرعي للأسهم
       </Link>
@@ -419,6 +429,7 @@ export default function RiskPage() {
         <button disabled={busy} className={primary}>
           {busy ? "جاري التقييم…" : "احسب المخاطر"}
         </button>
+        {source === "MANUAL" && <button type="submit" value="scanner" disabled={busy} className="text-primary underline disabled:opacity-50">حفظ لقطة المحفظة اليدوية للماسح</button>}
       </form>
       {result && (
         <article className={panel}>

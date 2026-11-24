@@ -165,14 +165,18 @@ def position_review(request, holding, capital, cash, report, live, plan):
     )
 
 
-def build_analysis(db, security, request, brokerage=None, *, for_risk_review=False):
-    now = datetime.now(timezone.utc)
-    expected = get_expected_latest_completed_session(now)
+def build_analysis(
+    db, security, request, brokerage=None, *, for_risk_review=False,
+    scan_time=None, completed_session=None,
+):
+    now = scan_time or datetime.now(timezone.utc)
+    expected = completed_session or get_expected_latest_completed_session(now)
     market = session_status(now)
     if brokerage and brokerage.market_status == "HALTED":
         market = "HALTED"
     history = default_provider_manager.get_analytical_bars(
-        security.ticker, db=db, limit=250, allow_network=False
+        security.ticker, db=db, limit=250, allow_network=False,
+        **({"completed_session": completed_session} if completed_session else {}),
     )
     bars = completed_analytical_bars(history.get("bars", []), expected, security.ticker)
     latest = bars[-1] if bars else {}

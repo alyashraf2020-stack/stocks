@@ -1,5 +1,7 @@
 "use client";
 
+import ScannerNavigation from "@/components/ScannerNavigation";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import AIStockAnalysis from "@/components/AIStockAnalysis";
@@ -22,6 +24,7 @@ export default function AITradingPage() {
     <section dir="rtl" className="mx-auto max-w-5xl space-y-5">
       <header className="space-y-2">
         <h1 className="text-3xl font-bold">مساعد تحليل البورصة</h1>
+      <ScannerNavigation />
         <div className="flex gap-5 text-primary underline">
           <Link href="/opportunities">الفرص للمراجعة</Link>
           <Link href="/portfolio">محفظة ثاندر</Link>

@@ -201,10 +201,13 @@ class ProviderManager:
         db: Optional[Session] = None,
         force_refresh: bool = False,
         allow_network: bool = True,
+        completed_session: Optional[datetime.date] = None,
     ) -> Dict[str, Any]:
         clean_ticker = ticker.strip().upper()
         now_cairo = datetime.datetime.now(CAIRO_TZ)
-        expected_session = get_expected_latest_completed_session(now_cairo)
+        if completed_session is not None and allow_network:
+            raise ValueError("A scanner calendar override is cache-only")
+        expected_session = completed_session or get_expected_latest_completed_session(now_cairo)
         expected_session_str = expected_session.isoformat()
         english_name = self._security_english_name(db, clean_ticker)
 
@@ -229,7 +232,15 @@ class ProviderManager:
 
             cached_validated = completed_analytical_bars(
                 (row.to_dict() for row in cached_rows), expected_session, clean_ticker
-            )[-limit:]
+            )
+            if completed_session is not None:
+                from app.services.scanner_calendar import hours
+
+                cached_validated = [
+                    bar for bar in cached_validated
+                    if isinstance(hours(datetime.date.fromisoformat(bar["session_date"])), tuple)
+                ]
+            cached_validated = cached_validated[-limit:]
             # Quarantine a suspect tail in memory. Keep the underlying market history.
             if self.suspect_cached_tail(cached_validated):
                 suspect = cached_validated.pop()
@@ -239,10 +250,13 @@ class ProviderManager:
                 cached_latest_date = datetime.date.fromisoformat(
                     cached_validated[-1]["session_date"]
                 )
-                cached_baseline_sessions_behind = calculate_sessions_behind(
-                    cached_latest_date,
-                    now_cairo,
-                )
+                if completed_session is not None:
+                    cached_baseline_sessions_behind = sum(
+                        isinstance(hours(cached_latest_date + datetime.timedelta(days=i)), tuple)
+                        for i in range(1, (completed_session - cached_latest_date).days + 1)
+                    )
+                else:
+                    cached_baseline_sessions_behind = calculate_sessions_behind(cached_latest_date, now_cairo)
 
                 if cached_baseline_sessions_behind == 0 and (len(cached_validated) >= 50 or not allow_network):
                     has_min_history = len(cached_validated) >= 50
@@ -488,6 +502,7 @@ class ProviderManager:
         db: Optional[Session] = None,
         force_refresh: bool = False,
         allow_network: bool = True,
+        completed_session: Optional[datetime.date] = None,
     ) -> Dict[str, Any]:
         raw_result = self.get_raw_historical_bars(
             ticker,
@@ -495,6 +510,7 @@ class ProviderManager:
             db=db,
             force_refresh=force_refresh,
             allow_network=allow_network,
+            **({"completed_session": completed_session} if completed_session else {}),
         )
         if raw_result["status"] == "DATA_UNAVAILABLE":
             return raw_result
