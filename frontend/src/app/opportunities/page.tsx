@@ -43,6 +43,7 @@ export default function OpportunitiesPage() {
   return (
     <section dir="rtl" className="space-y-4">
       <h1 className="text-3xl font-bold">الفرص للمراجعة</h1>
+      <Link href="/sharia" className="text-primary underline">حالة الفحص الشرعي والوضع الإسلامي</Link>
       <p className="text-sm text-gray-400">
         ترتيب حسابي مبني على آخر جلسة مكتملة وخطط الدخول المتاحة.
       </p>

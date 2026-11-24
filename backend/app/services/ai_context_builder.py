@@ -19,6 +19,7 @@ from app.services.indicators import TechnicalIndicatorEngine
 from app.services.owner_add_on import OwnerAddOnAdvisor
 from app.services.quote_freshness import validate_quote
 from app.services.risk_manager import RiskManager
+from app.services.risk_policy import apply_analysis_policy
 from app.services.stock_plans import valid_levels
 from app.services.technical_rating import TechnicalRatingEngine
 from app.services.trade_plan import TradePlanEngine
@@ -164,7 +165,7 @@ def position_review(request, holding, capital, cash, report, live, plan):
     )
 
 
-def build_analysis(db, security, request, brokerage=None):
+def build_analysis(db, security, request, brokerage=None, *, for_risk_review=False):
     now = datetime.now(timezone.utc)
     expected = get_expected_latest_completed_session(now)
     market = session_status(now)
@@ -344,6 +345,8 @@ def build_analysis(db, security, request, brokerage=None):
         report.position = position_review(
             request, holding, capital, cash, report, report.decision, plan
         )
+    if not for_risk_review:
+        apply_analysis_policy(db, security, report)
     add_evidence(report)
     return report
 

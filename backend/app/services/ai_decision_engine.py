@@ -36,7 +36,7 @@ def explain(report, request, config, owner_scope):
     report.ai_status = config.status
     if config.status != "CONFIGURED":
         return report
-    if not request.explain:
+    if not request.explain or report.risk_blockers:
         report.ai_status = "DETERMINISTIC_ONLY"
         return report
     if not report.levels or report.signal in {

@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
+import { reason, screenLabels } from "@/lib/risk";
 import { Analysis, aiLabels, aiRequest, signalLabels } from "@/lib/ai";
 import { dateLabel, freshnessLabel, numberLabel } from "@/lib/thndr";
 
@@ -61,6 +63,7 @@ export function AnalysisCard({ analysis: a }: { analysis: Analysis }) {
       )[a.risk],
     ],
     ["حجم المركز المشروط (سهم)", numberLabel(a.suggested_shares)],
+    ...(a.sharia_status ? [["الفحص الشرعي", screenLabels[a.sharia_status]] as [string,string]] : []),
   ];
   if (a.levels) {
     metrics.push(
@@ -119,6 +122,10 @@ export function AnalysisCard({ analysis: a }: { analysis: Analysis }) {
           </div>
         ))}
       </dl>
+      {a.risk_blockers?.length > 0 && <div className="text-sm text-amber-300">
+        <ul className="list-disc ps-5">{a.risk_blockers.map(code=><li key={code}>{reason(code)}</li>)}</ul>
+        <Link href="/risk" className="underline">تقييم مخاطر المحفظة</Link>
+      </div>}
       <p className="text-xs text-gray-400">
         اتفاق المؤشرات يوضح اتجاه الإشارات الفنية. المستويات للمراجعة، وتحتاج
         سعرًا موثّقًا قبل اتخاذ أي إجراء.

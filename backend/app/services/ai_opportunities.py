@@ -13,6 +13,7 @@ def rank(report):
     levels = report.levels
     if (
         not levels
+        or any(code == "KILL_SWITCH" or code.startswith("SHARIA_") for code in report.risk_blockers)
         or report.signal
         in {"NO_TRADE", "DATA_NOT_CURRENT", "INSUFFICIENT_DATA", "SELL", "STRONG_SELL"}
         or report.score is None

@@ -167,6 +167,7 @@ export default function PortfolioPage() {
           )}
         </>
       )}
+      <Link href="/risk" className="text-primary underline">تقييم مخاطر المحفظة</Link>
       <AIStockAnalysis portfolio />
     </section>
   );

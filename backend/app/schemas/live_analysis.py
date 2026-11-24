@@ -138,6 +138,7 @@ class BreakoutEntryResponse(BaseModel):
 class LiveAnalysisResponse(BaseModel):
     current_price_source: Literal["MANUAL_INPUT"] = "MANUAL_INPUT"
     executable_quote_verified: Literal[False] = False
+    risk_blockers: list[str] = Field(default_factory=list)
     ticker: str
     current_price: float
     decision: str

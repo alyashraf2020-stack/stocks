@@ -59,3 +59,10 @@ class RiskManager:
             "actual_risk_pct": actual_risk_pct,
             "actual_allocation_pct": actual_allocation_pct
         }
+
+    @staticmethod
+    def bounded_shares(limits):
+        """Floor the most conservative Decimal capacity, including across pending orders."""
+        from decimal import ROUND_FLOOR
+
+        return max(0, int(min(limits.values()).to_integral_value(rounding=ROUND_FLOOR)))

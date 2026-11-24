@@ -74,3 +74,24 @@ To enable OpenAI, set `AI_ENABLED=true` and `OPENAI_API_KEY` in the backend proc
 Daily and monthly caps default to USD 0.25 and USD 3. Settings also control output tokens, timeouts, cache TTL, per-ticker analysis interval and total request frequency. Keep `AI_LEDGER_PATH` on a private, persistent local filesystem shared by workers on this host. The default is `backend/instance/ai_usage.sqlite3`. Keep the ledger when restarting so usage carries forward. Daily and monthly aggregation use Cairo time. Reservations use a conservative prompt-size bound and reserve for two attempts. Charges use reported tokens at the configured standard rates, with ambiguous failures retaining an estimate. The dashboard reports estimates and token totals, and provider billing can differ. The circuit breaker cools down for 90 seconds after three recent upstream failures.
 
 `/opportunities` ranks current cached EOD plans with no OpenAI requests. Its optional Thndr view adjusts ranking for authorized exposure. A single portfolio review calculates up to 25 positions and requests at most one model interpretation for its highest-ranked eligible symbol. Fundamental data and order-book liquidity remain explicitly unavailable in this phase. Technical rating agreement describes the indicators. It does not estimate profit probability. The offline suite exercises the actual SDK against mocked Responses transport and never makes a paid API call.
+
+## Phase 4 · Portfolio risk and Islamic mode
+
+Open `/risk` on the owner HTTPS gateway. Save the risk policy, switch on the advanced limits to apply them to existing analysis entry points, and select either a complete manual snapshot or an authorized Thndr snapshot for a review. Tightening either hard cap also activates advanced enforcement. The hard ceilings are **1.5%** planned trade risk and **20%** stock allocation. When the portfolio evidence is incomplete, advanced sizing returns the missing inputs. The emergency setting blocks new entries and additions while preserving exit reviews.
+
+| Default for advanced review | Reason |
+| --- | --- |
+| 80% gross exposure, 30% per sector, 10 positions | Leave room for cash and reduce concentration and monitoring burden |
+| 3% daily loss and 10% drawdown | Pause new risk when the supplied valuation history shows material losses |
+| 6% aggregate open risk | Allow roughly four positions at the hard per-trade maximum before further sizing |
+| 1.5 minimum net reward/risk at the second target | Screen out setups with weak modeled reward after entry and exit costs |
+| EGP 1,000,000 daily turnover proxy | Exclude thin scenarios using completed-session mean volume times reference close |
+| 0.5% slippage per side and 2% extra stop gap | Model adverse fills in sizing without treating a stop as guaranteed |
+| 30-minute snapshot age | Require recently checked account inputs for sizing |
+| Commission and taxes unset | Enter the applicable rates, including explicit zeros where applicable |
+
+Manual values are in EGP. Enter gross **settled** cash before buy-order reservations and optional net broker buying power. Pending buys count against cash, stock and sector exposure, the position count, and aggregate risk. Enter sellable quantities after settlement and any pending sells. Sale proceeds in a scenario are shown separately and cannot fund another purchase before settlement. Daily loss requires the prior completed session's flow-adjusted equity, and drawdown requires at least two dated valuations within the supplied adjusted series. The Thndr adapter keeps absent settlement, stops, order reserves and history unavailable.
+
+Open `/sharia` to review or record dated evidence against an ISIN. Confirm the instrument is a common stock, then cite the issuer's published activity and latest available statements as well as the review-period average market value, using comparable units and currency. The app calculates the August 2025 EGX33 activity and financial screens at **5%, 33%, 33%, and 70%**. It uses a strict admission screen and separate dated index-membership evidence. Review records expire after 183 days, and statements more than 365 days old fail the currency check for the app's screen. Membership alone cannot satisfy the screen. The owner is responsible for verifying each source and value before recording it. The app provides an evidence-based classification, without issuing a religious ruling. [EGX methodology](https://beta.egx.com.eg/api/media/uploads/EGX_33_Shariah_Index_4_aug_2025_3ee293dea8.pdf)
+
+Enable Islamic mode in the risk policy to exclude unverified or failed screenings from opportunity rankings and block new-entry and add-on proposals. Existing holdings remain visible for review. Historical levels and analysis are informational. Phase 4 continues to return non-executable scenarios.

@@ -2,6 +2,8 @@ import type { Freshness } from "@/lib/thndr";
 
 export interface Analysis {
   ticker: string;
+  risk_blockers: string[];
+  sharia_status: "COMPLIANT" | "NON_COMPLIANT" | "UNVERIFIED" | null;
   company: string;
   signal: string;
   decision: string;

@@ -21,3 +21,9 @@
 - Added atomic budget accounting, model fallback, private cache and request deduplication.
 - Added an AI dashboard, opportunity ranking and controls on stock and portfolio pages.
 - Kept phase 2 quote and authorization gates in the analysis path and verified the SWDY provider coverage failure separately.
+
+## Phase 4 · Portfolio risk and Islamic mode
+
+- Added owner risk policy, Decimal sizing, cost and gap estimates, exposure and historical valuation checks, and review-only holding scenarios.
+- Added EGX-methodology screening with dated sources, expiry, explicit unknown results, and independent index membership evidence.
+- Integrated risk and Islamic entry gates with analysis and rankings, and added the Arabic portfolio risk and screening pages.

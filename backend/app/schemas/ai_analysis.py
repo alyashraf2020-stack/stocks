@@ -118,6 +118,8 @@ class Analysis(BaseModel):
     decision: str
     explanation_ar: str
     executable: Literal[False] = False
+    risk_blockers: list[str] = Field(default_factory=list)
+    sharia_status: Literal["COMPLIANT", "NON_COMPLIANT", "UNVERIFIED"] | None = None
     price: float | None
     provider: str | None
     price_timestamp: datetime | None = None

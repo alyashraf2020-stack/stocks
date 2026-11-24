@@ -9,6 +9,7 @@ from app.schemas.live_analysis import (
     ManualEODResponse,
 )
 from app.services.security_master import SecurityMasterService
+from app.services.risk_policy import legacy_entry_blocks
 from app.services.data_provider.manager import default_provider_manager
 from app.services.indicators import TechnicalIndicatorEngine
 from app.services.decision_engine import LiveDecisionEngine
@@ -197,6 +198,26 @@ def analyze_live_price(req: LiveAnalysisRequest, db: Session = Depends(get_db)):
         decision_result["actionable_new_trade"] = bool(breakout_entry.get("actionable", False))
         decision_result["badge_color"] = "green" if breakout_entry.get("actionable") else "amber"
 
+    blockers = legacy_entry_blocks(db, sec)
+    if blockers:
+        if decision_result.get("actionable_new_trade"):
+            decision_result.update(decision="WAIT", decision_ar="انتظر مراجعة المخاطر",
+                                   reason_ar="راجع سياسة المحفظة والفحص الشرعي قبل اقتراح دخول جديد.",
+                                   badge_color="amber")
+        decision_result.update(actionable_new_trade=False, new_entry_allowed=False, position_sizing=None)
+        if decision_result.get("trade_plan"):
+            decision_result["trade_plan"]["new_entry_allowed"] = False
+        if breakout_entry.get("actionable"):
+            breakout_entry.update(actionable=False, decision="WAIT", decision_ar="انتظر مراجعة المخاطر",
+                                  reason_ar="سياسة المحفظة تمنع تفعيل الإشارة.")
+    if owner_add_on and (blockers or (owner_add_on.get("sizing") or {}).get("executable_add_on_shares", 0)):
+        sizing = owner_add_on.get("sizing") if not blockers else None
+        if sizing:
+            sizing["executable_add_on_shares"] = 0
+        owner_add_on.update(decision="USE_PORTFOLIO_REVIEW", decision_ar="راجع مخاطر المحفظة",
+                            reason_ar="زيادة المركز تحتاج مراجعة السيولة والكاش المتاح ومخاطر المحفظة.",
+                            sizing=sizing)
+    decision_result["risk_blockers"] = blockers
     decision_result["owner_add_on"] = owner_add_on
     decision_result["corporate_events"] = corporate_events
     decision_result["market_depth"] = market_depth
