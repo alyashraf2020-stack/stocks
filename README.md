@@ -141,3 +141,11 @@ Open `/scanner` to enable or pause automatic scheduling, request a manual run, i
 The worker reads cached market data only. Refresh/import licensed EOD data using an authorized process separately from scanning. A date without its valid completed-session candle is unavailable under zero-session-lag. Delayed Thndr quotes stay separate from EOD results and serve only as review observations. The 2026 calendar is an analytical schedule with explicit Cairo coverage and special closures. An exchange halt or unexpected closure needs a reviewed override. The schedule alone does not verify an open live session. Review updated exchange notices before extending coverage.
 
 For managed operation, supervise the worker with your service manager and capture stdout and stderr. With a service named `egx-scanner`, use `journalctl -u egx-scanner -f` and check the heartbeat on `/scanner`. Restart the same command against the same database after an outage. Expired jobs recover automatically within the persisted attempt limit. Terminal failures remain in history and can be retried with a new manual run. Keep backups of the private database and OpenAI ledger outside Git. API routes and request schemas appear under `/docs` through the private gateway.
+
+## Phase 6 · المحفظة الافتراضية والاختبار التاريخي
+
+بعد نسخة احتياطية خاصة، شغّل `python -m alembic upgrade head` من `backend`. شغّل `python -m app.workers.paper_worker` و`python -m app.workers.backtest_worker` في عمليتين مستقلتين بنفس `DATABASE_URL` المستخدمة في FastAPI. استخدم بوابة HTTPS الخاصة والـAPI المحمي. إعدادات الرسوم مطلوبة لكل حساب أو اختبار. الأتمتة متوقفة للحسابات الجديدة وتحتاج جولة ماسح منشورة مع حزمة سوق معتمدة مطابقة.
+
+- [تشغيل المحفظة الافتراضية ونموذج التنفيذ](PAPER_TRADING.md)
+- [البيانات والاستراتيجيات ومقاييس الاختبار](BACKTESTING_METHODOLOGY.md)
+- [تقرير التحقق الأولي للاستراتيجية](STRATEGY_VALIDATION.md)

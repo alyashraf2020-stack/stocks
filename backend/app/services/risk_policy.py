@@ -37,9 +37,11 @@ def entry_blocks(policy, sharia_status, *, advanced_supported):
 
 
 def calculate_size(
-    candidate, snapshot, sectors, policy, source, sharia_status, now=None
+    candidate, snapshot, sectors, policy, source, sharia_status, now=None,
+    *, fee_buffer=ZERO, previous_session=None, initial_baseline=False,
 ):
-    portfolio = summarize(snapshot, sectors, policy, source, now)
+    portfolio = summarize(snapshot, sectors, policy, source, now, fee_buffer=fee_buffer,
+                          previous_session=previous_session, initial_baseline=initial_baseline)
     blockers = entry_blocks(policy, sharia_status, advanced_supported=True) + list(
         portfolio["missing"]
     )
@@ -80,7 +82,7 @@ def calculate_size(
 
     equity = snapshot.equity
     cash_cost, unit_risk, unit_reward, fee = trade_costs(
-        policy, candidate.entry, candidate.stop, candidate.target
+        policy, candidate.entry, candidate.stop, candidate.target, fee_buffer=fee_buffer
     )
     result["reward_to_risk"] = unit_reward / unit_risk
     if result["reward_to_risk"] < policy.min_reward_to_risk:
@@ -102,7 +104,7 @@ def calculate_size(
         return result
 
     # Charge a stock top-up for the existing stake's risk at its current stop.
-    existing_risk = position_risk(existing, policy) if existing else ZERO
+    existing_risk = position_risk(existing, policy, fee_buffer=fee_buffer) if existing else ZERO
     pending_same_risk = sum(
         (p.planned_risk for p in pending if p.ticker == candidate.ticker), ZERO
     )

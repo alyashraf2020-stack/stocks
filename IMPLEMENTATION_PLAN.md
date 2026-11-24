@@ -112,3 +112,11 @@ The issuer confirms the EGX listing and the FRA disclosure identifies SWDY.CA as
 SWDY stays in the listed universe and in the strict opt-in provider matrix. The scanner records absent or outdated data and continues with other symbols. No verified licensed EOD import for SWDY was available during implementation. A live connection still requires owner authorization and the accepted callback. Continuous service hosting and Telegram commissioning remain separate deployment work. The next delivery step is a supervised installation with an authorized daily data import and independent data/feed entitlements before any intraday monitoring.
 
 Verification used a copied SQLite database and a separately launched scanner process with the frontend and API stopped. One controlled COMI history fixture produced a historical observation for the November 24 session. SWDY remained unavailable and the job still completed, with zero OpenAI tokens. The offline suite includes 20 scanner cases in addition to the 324-test baseline and exercises the real HTTPS gateway on loopback.
+
+## Phase 6 evidence
+
+The paper and backtest workers share virtual execution and deterministic strategy components. EOD execution needs an approved immutable dataset with identity, time of availability, price restrictions and reviewed corporate actions. Real brokerage connectivity and model summaries are outside the execution path. The shipped cache inventory establishes data coverage, not favorable strategy behavior. [Initial strategy validation](STRATEGY_VALIDATION.md)
+
+Phase 7 can commission the authorized EOD data feed, expand audited calendar coverage, and connect notification delivery to the existing outbox. Strategy claims need point-in-time instrument, corporate-action, screening and benchmark evidence.
+
+Verification covered 368 offline tests, TypeScript, the production build, and all seven new routes from the built frontend. Independent workers completed an isolated synthetic fill and the actual coverage-only backtest with ten instruments excluded. No price fixture was included in the strategy validation result.

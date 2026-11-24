@@ -66,7 +66,7 @@ def record_evidence(ticker: str, evidence: ScreeningEvidence, db: DB):
     if row is not None and row.evidence != payload:
         raise HTTPException(409, "REVIEW_DATE_ALREADY_RECORDED")
     if row is None:
-        db.add(ShariaScreening(isin=key[0], reviewed_on=key[1], evidence=payload))
+        db.add(ShariaScreening(isin=key[0], reviewed_on=key[1], evidence=payload, recorded_at=datetime.now(CAIRO_TZ).timestamp()))
         try:
             db.commit()
         except IntegrityError:

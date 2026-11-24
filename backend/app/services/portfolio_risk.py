@@ -45,19 +45,19 @@ def fees_configured(policy):
     )
 
 
-def trade_costs(policy, entry, stop, target):
+def trade_costs(policy, entry, stop, target, fee_buffer=ZERO):
     entry_fill = entry * (ONE + policy.slippage_rate)
     stop_fill = stop * (ONE - policy.slippage_rate) * (ONE - policy.stop_gap_rate)
     target_fill = target * (ONE - policy.slippage_rate)
-    buy_fee = entry_fill * (policy.commission_rate + policy.buy_tax_rate)
+    buy_fee = entry_fill * (policy.commission_rate + policy.buy_tax_rate) + fee_buffer
     sell_rate = policy.commission_rate + policy.sell_tax_rate
     cash_cost = entry_fill + buy_fee
-    stop_net = stop_fill * (ONE - sell_rate)
-    target_net = target_fill * (ONE - sell_rate)
+    stop_net = stop_fill * (ONE - sell_rate) - fee_buffer
+    target_net = target_fill * (ONE - sell_rate) - fee_buffer
     return cash_cost, cash_cost - stop_net, target_net - cash_cost, buy_fee
 
 
-def position_risk(position, policy, stop=None):
+def position_risk(position, policy, stop=None, fee_buffer=ZERO):
     stop = position.stop if stop is None else stop
     if (
         not fees_configured(policy)
@@ -67,11 +67,11 @@ def position_risk(position, policy, stop=None):
     ):
         return None
     exit_fill = stop * (ONE - policy.slippage_rate) * (ONE - policy.stop_gap_rate)
-    exit_net = exit_fill * (ONE - policy.commission_rate - policy.sell_tax_rate)
+    exit_net = exit_fill * (ONE - policy.commission_rate - policy.sell_tax_rate) - fee_buffer
     return max(ZERO, position.mark - exit_net) * position.shares
 
 
-def history_metrics(snapshot, now):
+def history_metrics(snapshot, now, *, previous_session=None, initial_baseline=False):
     if (
         snapshot.adjusted_equity_now is None
         or not snapshot.adjusted_history
@@ -79,10 +79,10 @@ def history_metrics(snapshot, now):
     ):
         return None, None
     local = now.astimezone(CAIRO_TZ)
-    previous = get_expected_latest_completed_session(
+    previous = previous_session or get_expected_latest_completed_session(
         local.replace(hour=0, minute=0, second=0, microsecond=0)
     )
-    expected = get_expected_latest_completed_session(local)
+    expected = max(previous, local.date()) if previous_session else get_expected_latest_completed_session(local)
     values = {entry.day: entry.equity for entry in snapshot.adjusted_history}
     if (
         snapshot.as_of > now
@@ -91,14 +91,17 @@ def history_metrics(snapshot, now):
     ):
         return None, None
     base = values.get(previous)
+    if not base and initial_baseline and len(values) == 1:
+        # A newly initialized virtual account has a known opening NAV today.
+        base = values.get(local.date())
     current = snapshot.adjusted_equity_now
     loss = max(ZERO, (base - current) / base) if base else None
-    peak = max(values.values()) if len(values) >= 2 and base is not None else None
+    peak = max(values.values()) if (len(values) >= 2 or initial_baseline) and base is not None else None
     drawdown = max(ZERO, (peak - current) / peak) if peak else None
     return loss, drawdown
 
 
-def summarize(snapshot, sectors, policy, source, now=None):
+def summarize(snapshot, sectors, policy, source, now=None, *, fee_buffer=ZERO, previous_session=None, initial_baseline=False):
     now = now or datetime.now(timezone.utc)
     equity = snapshot.equity
     items = snapshot.positions
@@ -115,7 +118,7 @@ def summarize(snapshot, sectors, policy, source, now=None):
     sector_known = items is not None and all(
         sectors.get(ticker) and value is not None for ticker, value in stock.items()
     )
-    risks = [position_risk(p, policy) for p in items or []]
+    risks = [position_risk(p, policy, fee_buffer=fee_buffer) for p in items or []]
     risk = known_sum(risks) if items is not None else None
     pending = snapshot.pending_buys
     reserve = (
@@ -131,7 +134,7 @@ def summarize(snapshot, sectors, policy, source, now=None):
     pending_risk = (
         known_sum([p.planned_risk for p in pending]) if pending is not None else None
     )
-    loss, drawdown = history_metrics(snapshot, now)
+    loss, drawdown = history_metrics(snapshot, now, previous_session=previous_session, initial_baseline=initial_baseline)
     fresh = snapshot.as_of is not None and timedelta(
         0
     ) <= now - snapshot.as_of <= timedelta(minutes=policy.max_snapshot_minutes)

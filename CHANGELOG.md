@@ -35,3 +35,9 @@
 - Added risk and Sharia publication gates, deterministic signal transitions, optional budgeted AI interpretation and transactional in-app alerts.
 - Added Arabic scanner, watchlist, notification and settings pages, and integrated results with opportunities and existing owner pages.
 - Added an external delivery adapter boundary. Telegram and licensed intraday ingestion remain pending.
+
+## Phase 6 · Virtual execution and historical validation
+
+- Added multiple virtual accounts, order and fill audit, cash reservations and deposits, settlement, protective exits and independent paper reconciliation.
+- Added approved dataset versions, five close-only strategies, advanced risk and historical Sharia gates, durable backtest jobs, benchmark comparisons, metrics, stress and chronological validation.
+- Added protected Arabic dashboards, CSV and JSON output, and a validation report with no claimed profitability.
