@@ -14,3 +14,10 @@
 - Corrected strategy assertions for fresh closes outside entry zones, completed targets and a valid pullback re-entry.
 - Added read-only Thndr OAuth and MCP integration with encrypted persistence, PKCE, scope checks, refresh, revocation and throttling.
 - Added independently classified broker quotes and Arabic settings and portfolio pages.
+
+## Phase 3 · OpenAI interpretation and opportunity analysis
+
+- Added optional tool-free structured interpretation with a deterministic Egyptian Arabic renderer and protected stock and portfolio analysis routes.
+- Added atomic budget accounting, model fallback, private cache and request deduplication.
+- Added an AI dashboard, opportunity ranking and controls on stock and portfolio pages.
+- Kept phase 2 quote and authorization gates in the analysis path and verified the SWDY provider coverage failure separately.

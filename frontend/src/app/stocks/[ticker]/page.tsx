@@ -18,6 +18,7 @@ import {
 import { getStockDetail, getStockChart, refreshStockData, getStockTechnical } from "@/lib/api";
 import { Stock, ChartData, StockPlan } from "@/lib/types";
 import InteractiveCandleChart from "@/components/InteractiveCandleChart";
+import AIStockAnalysis from "@/components/AIStockAnalysis";
 import CompanyProfileCard from "@/components/CompanyProfileCard";
 import TechnicalSummaryCard from "@/components/TechnicalSummaryCard";
 
@@ -247,6 +248,7 @@ export default function StockDetailPage() {
       <TechnicalSummaryCard report={report} loading={reportLoading} error={reportError} />
 
       {/* Technical Metadata & Provenance Footer */}
+      <AIStockAnalysis ticker={stock.ticker} />
       {["MBSC", "MPCI", "BIOC"].includes(stock.ticker) && <CompanyProfileCard ticker={stock.ticker}
         refreshKey={companyRefreshKey} latestBar={chartData?.bars[chartData.bars.length - 1]} />}
 

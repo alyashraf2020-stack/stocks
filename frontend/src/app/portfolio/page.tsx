@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import AIStockAnalysis from "@/components/AIStockAnalysis";
 import { useEffect, useState } from "react";
 import {
   dateLabel,
@@ -166,6 +167,7 @@ export default function PortfolioPage() {
           )}
         </>
       )}
+      <AIStockAnalysis portfolio />
     </section>
   );
 }

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { TrendingUp, BarChart3, Clock, Compass, ListChecks, Wallet, Link2 } from "lucide-react";
+import { TrendingUp, BarChart3, Clock, Compass, ListChecks, Wallet, Link2, Sparkles } from "lucide-react";
 import { getMarketStatus } from "@/lib/api";
 import { MarketStatus } from "@/lib/types";
 
@@ -22,6 +22,7 @@ export default function Navbar() {
     { href: "/stocks", label: "الأسهم", icon: Compass },
     { href: "/plans", label: "خطط كل الأسهم", icon: ListChecks },
     { href: "/live-analysis", label: "تحليل السعر الحالي", icon: TrendingUp },
+    { href: "/ai-trading", label: "مساعد التحليل", icon: Sparkles },
     { href: "/portfolio", label: "المحفظة", icon: Wallet },
     { href: "/settings/integrations", label: "ربط الحساب", icon: Link2 },
   ];
