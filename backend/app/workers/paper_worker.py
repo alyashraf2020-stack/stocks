@@ -10,6 +10,7 @@ from sqlalchemy.exc import OperationalError
 from app.core.database import SessionLocal
 from app.services.paper_trading import process_batch
 from app.services.scanner_calendar import CAIRO
+from app.services.worker_pulse import pulse
 
 
 def main():
@@ -19,6 +20,7 @@ def main():
         signal.signal(key, lambda *_: stop.set())
     while not stop.is_set():
         try:
+            pulse(SessionLocal, "paper")
             process_batch(SessionLocal, datetime.now(CAIRO))
         except OperationalError:
             print("VIRTUAL_DATABASE_UNAVAILABLE", flush=True)

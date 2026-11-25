@@ -32,6 +32,11 @@ def symbol_alerts(db, settings, now, row, prior, fingerprint, broker_sync=None):
                 "freshness": obs.get("freshness", "UNKNOWN"),
                 "reason": reason,
                 "_broker_sync": broker_sync,
+                "_instrument": obs.get("instrument_id"),
+                "_signal_expires": report.get("expires_at"),
+                "_ref_session": report.get("reference_session"),
+                "_fingerprint": fingerprint,
+                "_scope": settings.mode,
                 "limitations": [
                     "REVIEW_ONLY",
                     "NO_VERIFIED_LIVE_SESSION",
@@ -145,6 +150,11 @@ def portfolio_alert(db, settings, now, summary, broker_sync=None):
                 "reason": "PORTFOLIO_REVIEW_REQUIRED",
                 "limitations": facts["missing"],
                 "_broker_sync": broker_sync,
+                "_instrument": obs.get("instrument_id"),
+                "_signal_expires": report.get("expires_at"),
+                "_ref_session": report.get("reference_session"),
+                "_fingerprint": fingerprint,
+                "_scope": settings.mode,
                 "source_timestamp": summary["as_of"].isoformat()
                 if summary["as_of"]
                 else None,

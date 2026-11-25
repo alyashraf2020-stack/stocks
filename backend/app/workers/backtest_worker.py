@@ -9,6 +9,7 @@ import time
 from sqlalchemy.exc import OperationalError
 
 from app.core.database import SessionLocal
+from app.services.worker_pulse import pulse
 from app.services.backtesting import (
     TIMEOUT_SECONDS,
     claim,
@@ -64,6 +65,7 @@ def run_job(key, token, stop):
                     finish(db, key, token, time.time(), error="BACKTEST_TIME_LIMIT")
                 return
             if clock >= next_beat:
+                pulse(SessionLocal, "backtest")
                 with SessionLocal() as db:
                     if not heartbeat(db, key, token, time.time(), progress):
                         return
@@ -108,6 +110,7 @@ def main():
         signal.signal(item, lambda *_: stop.set())
     while not stop.is_set():
         try:
+            pulse(SessionLocal, "backtest")
             with SessionLocal() as db:
                 job = claim(db, time.time())
             if job:

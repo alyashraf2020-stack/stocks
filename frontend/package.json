@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
+    "prebuild": "npm run test:pwa",
     "build": "next build",
+    "test:pwa": "node --test tests/pwa.test.mjs",
     "start": "next start -p 3000",
     "lint": "next lint",
     "type-check": "tsc --noEmit"

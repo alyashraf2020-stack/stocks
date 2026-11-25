@@ -239,6 +239,11 @@ def evaluate(db, ticker, settings, context):
             brokerage.model_dump(mode="json") if brokerage else None,
         ]
     )
+    from app.services.market_import import approved_series
+
+    approved_version, approved_bars = approved_series(db, ticker, expected, now)
+    if approved_version:
+        fingerprint = digest([fingerprint, approved_version])
     prior = db.get(TradingSignal, (scope, ticker))
     if prior and prior.fingerprint == fingerprint:
         return fingerprint, prior.data, True
@@ -257,6 +262,8 @@ def evaluate(db, ticker, settings, context):
         completed_session=expected,
     )
     observed = observations(report, expected, security, now, market)
+    if approved_bars and report.provider == approved_bars[-1]["actual_provider"]:
+        observed["source_available_at"] = approved_bars[-1].get("available_at")
     report.price_timestamp = (
         datetime.fromisoformat(observed["source_timestamp"])
         if observed["source_timestamp"]

@@ -138,7 +138,7 @@ def test_migration_preserves_legacy_tables_on_repeat(tmp_path, monkeypatch):
             subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], check=True,
                            cwd=Path(__file__).resolve().parents[1])
         assert existing_data() == original
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0004_simulation",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0005_mobile_operations",)
         assert conn.execute("SELECT count(*) FROM egx_candle_revisions").fetchone() == (0,)
     finally:
         conn.close()

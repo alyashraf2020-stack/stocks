@@ -101,7 +101,9 @@ def enqueue(db, cal, now, *, manual=False):
             )
             if queued:
                 return queued.id
-        key = f"{settings.revision}:{settings.mode}:{session}"
+        from app.services.market_import import scan_window
+
+        key = scan_window(db, settings, session, scheduled=not manual)
         if manual:
             key += f":manual:{int(now // 60)}"
         inserted = db.execute(

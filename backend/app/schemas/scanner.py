@@ -24,7 +24,7 @@ class ScannerEnvironment(BaseSettings):
     SCANNER_HISTORY_RETENTION_DAYS: int = Field(default=30, ge=2, le=365)
     SCANNER_THNDR_MIN_INTERVAL_SECONDS: int = Field(default=300, ge=60, le=86400)
     ALERT_COOLDOWN_SECONDS: int = Field(default=21600, ge=0, le=604800)
-    TELEGRAM_ENABLED: Literal[False] = False
+    TELEGRAM_ENABLED: bool = False
 
     @field_validator("SCANNER_INTERVAL_SECONDS", mode="before")
     @classmethod

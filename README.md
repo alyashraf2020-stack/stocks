@@ -136,7 +136,7 @@ Open `/scanner` to enable or pause automatic scheduling, request a manual run, i
 | `SCANNER_THNDR_MIN_INTERVAL_SECONDS` | 300 seconds between authorized grant checks across workers, plus Thndr's existing provider cooldown. |
 | `SCANNER_AI_ENABLED`, `SCANNER_MAX_AI_REQUESTS_PER_SCAN` | Off, at most two ranked new contexts per scan when explicitly enabled. The existing OpenAI ledger, budget, cadence and retries still apply. |
 | `ALERT_COOLDOWN_SECONDS`, `SCANNER_HISTORY_RETENTION_DAYS` | Six-hour category/symbol cooldown and 30-day scanner history. Entry alerts expire after one day, other alerts after seven. |
-| `TELEGRAM_ENABLED` | Disabled. The persistent outbox is available. Telegram transport, destination validation and test delivery are deferred to Phase 7. Do not configure a token or chat ID for this release. |
+| `TELEGRAM_ENABLED` | Disabled by default. Read the Phase 7 setup below for protected chat pairing. |
 
 The worker reads cached market data only. Refresh/import licensed EOD data using an authorized process separately from scanning. A date without its valid completed-session candle is unavailable under zero-session-lag. Delayed Thndr quotes stay separate from EOD results and serve only as review observations. The 2026 calendar is an analytical schedule with explicit Cairo coverage and special closures. An exchange halt or unexpected closure needs a reviewed override. The schedule alone does not verify an open live session. Review updated exchange notices before extending coverage.
 
@@ -149,3 +149,14 @@ For managed operation, supervise the worker with your service manager and captur
 - [تشغيل المحفظة الافتراضية ونموذج التنفيذ](PAPER_TRADING.md)
 - [البيانات والاستراتيجيات ومقاييس الاختبار](BACKTESTING_METHODOLOGY.md)
 - [تقرير التحقق الأولي للاستراتيجية](STRATEGY_VALIDATION.md)
+
+
+## Phase 7 · تطبيق الموبايل والإشعارات والبيانات
+
+بعد نسخة احتياطية من SQLite شغّل `python -m alembic upgrade head` من `backend`. بوابة HTTPS بتقدم التطبيق القابل للتثبيت وصفحة الأوفلاين. افتح `/system` لمراجعة التشغيل. شغّل `python -m app.workers.notification_worker` من نفس البيئة الخاصة. الاستيراد اليدوي متاح من `/data/import`، و`python -m app.workers.import_worker` اختياري لصندوق ملفات محلي مصرح بيه.
+
+- [التثبيت والوصول وأمثلة تشغيل الخدمات](MOBILE_SETUP.md)
+- [إعداد Telegram وWeb Push](TELEGRAM_SETUP.md)
+- [المصادر والحقوق واستيراد CSV / JSON](MARKET_DATA_SOURCES.md)
+- [معمارية الإرسال والخصوصية](NOTIFICATION_ARCHITECTURE.md)
+- [نتيجة التحقق من ربحية الاستراتيجية](STRATEGY_VALIDATION.md)

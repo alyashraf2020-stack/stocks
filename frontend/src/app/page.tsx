@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { getMarketStatus } from "@/lib/api";
 import { MarketStatus, Stock } from "@/lib/types";
+import OperationsDashboard from "@/components/OperationsDashboard";
 import StockSearchInput from "@/components/StockSearchInput";
 
 export default function HomePage() {
@@ -34,6 +35,7 @@ export default function HomePage() {
 
   return (
     <div className="space-y-10">
+      <OperationsDashboard />
       {/* Hero Section */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-surface to-surface/60 border border-surfaceBorder p-8 md:p-12 text-center space-y-6">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold text-primary">

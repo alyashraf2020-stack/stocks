@@ -27,6 +27,10 @@ CATEGORIES = frozenset(
         "SCANNER_FAILURE",
         "KILL_SWITCH",
         "TECHNICAL_CHANGE",
+        "PAPER_FILL",
+        "PAPER_REJECTED",
+        "BACKTEST_COMPLETED",
+        "BACKTEST_FAILED",
     }
 )
 
@@ -91,6 +95,9 @@ def emit(db, settings, now, category, severity, facts, identity, scope=""):
         )
     )
     db.flush()
+    from app.services.notification_delivery import fanout
+
+    fanout(db, alert_id)
 
 
 def deliver_one(db_factory, adapter: NotificationAdapter, clock):

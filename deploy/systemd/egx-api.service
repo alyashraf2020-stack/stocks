@@ -1,0 +1,24 @@
+[Unit]
+Description=Private EGX API
+After=network.target
+
+[Service]
+Type=simple
+User=egx
+Group=egx
+WorkingDirectory=/opt/egx/backend
+EnvironmentFile=/etc/egx/private.env
+UMask=0077
+ExecStart=/opt/egx/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=40s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/egx
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

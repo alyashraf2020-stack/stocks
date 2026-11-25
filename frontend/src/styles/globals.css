@@ -39,3 +39,6 @@ body {
   display: inline-block;
   unicode-bidi: embed;
 }
+html[data-egx-offline] main {
+  display: none;
+}

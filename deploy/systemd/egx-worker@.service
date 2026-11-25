@@ -1,0 +1,26 @@
+[Unit]
+Description=EGX background worker (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=egx
+Group=egx
+WorkingDirectory=/opt/egx/backend
+EnvironmentFile=/etc/egx/private.env
+UMask=0077
+ExecStart=/opt/egx/venv/bin/python -m app.workers.%i_worker
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=45s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/egx
+MemoryMax=1536M
+CPUQuota=150%
+
+[Install]
+WantedBy=multi-user.target

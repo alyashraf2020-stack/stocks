@@ -39,7 +39,9 @@ def health(db, now, market):
     )
     run = db.get(MarketScan, job.id) if job else None
     if due is None and settings.enabled and settings.interval_seconds == 0:
-        key = f"{settings.revision}:{settings.mode}:{market['completed_session']}"
+        from app.services.market_import import scan_window
+
+        key = scan_window(db, settings, market["completed_session"])
         scheduled = db.scalar(select(ScheduledJob.id).where(ScheduledJob.window == key))
         if not scheduled and eod_due(market) is not None:
             due = max(now, eod_due(market))

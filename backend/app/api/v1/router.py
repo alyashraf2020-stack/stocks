@@ -16,3 +16,9 @@ api_router.include_router(notifications.router, tags=["Scanner notifications"])
 
 api_router.include_router(paper_trading.router, tags=["Virtual paper trading"])
 api_router.include_router(backtesting.router, tags=["Historical backtesting"])
+
+from app.api.v1.endpoints import market_data, notification_settings, system
+
+api_router.include_router(notification_settings.router, tags=["Notification delivery"])
+api_router.include_router(market_data.router, tags=["Approved market data"])
+api_router.include_router(system.router, tags=["Owner system health"])

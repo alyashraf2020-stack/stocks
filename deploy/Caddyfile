@@ -8,8 +8,11 @@ https://{$APP_HOST} {
             not header Origin https://{$APP_HOST}
         }
         respond @untrustedWrite 403
+        @publicShell path /pwa/offline.html /pwa/icon-192.png /pwa/icon-512.png /pwa/apple-touch-icon.png /manifest.webmanifest
+        @privateResponse not path /pwa/offline.html /pwa/icon-192.png /pwa/icon-512.png /pwa/apple-touch-icon.png /manifest.webmanifest
+        header @publicShell >Cache-Control "public, max-age=3600"
+        header @privateResponse >Cache-Control "private, no-store"
         header {
-            Cache-Control "private, no-store"
             Strict-Transport-Security "max-age=31536000"
             X-Content-Type-Options nosniff
             Referrer-Policy no-referrer

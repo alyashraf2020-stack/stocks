@@ -22,6 +22,11 @@ DB = Annotated[Session, Depends(get_db)]
 async def notifications(
     db: DB, unread: bool = False, limit: int = Query(75, ge=1, le=100)
 ):
+    from app.services.notification_delivery import SEVERITIES, prefs
+
+    settings = prefs(db)
+    if not settings.in_app:
+        return []
     policy = load_policy(db)
     sync = None
     broker_series = Notification.series.like("THNDR_PORTFOLIO:%")
@@ -41,7 +46,9 @@ async def notifications(
         permitted = permitted | (
             Notification.payload["_broker_sync"].as_string() == sync
         )
-    query = query.where(permitted)
+    query = query.where(permitted,
+                        ~Notification.category.in_(settings.muted),
+                        Notification.severity.in_(SEVERITIES[SEVERITIES.index(settings.severity):]))
     if unread:
         query = query.where(Notification.read_at.is_(None))
     rows = db.execute(query.order_by(Notification.created.desc()).limit(limit))

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { TrendingUp, BarChart3, Clock, Compass, ListChecks, Wallet, Link2, Sparkles, ShieldCheck } from "lucide-react";
+import { modules } from "@/components/MobileNavigation";
 import { getMarketStatus } from "@/lib/api";
 import { MarketStatus } from "@/lib/types";
 
@@ -27,6 +28,8 @@ export default function Navbar() {
     { href: "/ai-trading", label: "مساعد التحليل", icon: Sparkles },
     { href: "/risk", label: "المخاطر", icon: ShieldCheck },
     { href: "/portfolio", label: "المحفظة", icon: Wallet },
+    { href: "/data", label: "البيانات", icon: Compass },
+    { href: "/system", label: "حالة التشغيل", icon: Clock },
     { href: "/settings/integrations", label: "ربط الحساب", icon: Link2 },
   ];
 
@@ -48,7 +51,7 @@ export default function Navbar() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="flex flex-wrap items-center gap-1 sm:gap-2">
+          <nav className="hidden md:flex flex-wrap items-center gap-1 sm:gap-2">
             {navLinks.map((link) => {
               const Icon = link.icon;
               const isActive = pathname === link.href;
@@ -68,6 +71,17 @@ export default function Navbar() {
               );
             })}
           </nav>
+
+          <details className="relative hidden text-sm md:block">
+            <summary className="cursor-pointer rounded-lg px-3 py-2 text-primary">كل الأقسام</summary>
+            <div className="absolute end-0 z-20 grid max-h-[65dvh] min-w-72 grid-cols-2 gap-1 overflow-y-auto rounded-xl border border-surfaceBorder bg-surface p-2 shadow-xl">
+              {modules.map(([href, name]) => <Link key={href} href={href}
+                className="flex min-h-10 items-center rounded px-2 hover:bg-surfaceHover"
+                onClick={(event) => { const menu = event.currentTarget.closest("details"); if (menu) menu.open = false; }}>
+                {name}
+              </Link>)}
+            </div>
+          </details>
 
           {/* Dynamic Market Status Pill */}
           <div className="hidden md:flex items-center gap-2 text-xs">

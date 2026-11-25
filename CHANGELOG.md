@@ -41,3 +41,10 @@
 - Added multiple virtual accounts, order and fill audit, cash reservations and deposits, settlement, protective exits and independent paper reconciliation.
 - Added approved dataset versions, five close-only strategies, advanced risk and historical Sharia gates, durable backtest jobs, benchmark comparisons, metrics, stress and chronological validation.
 - Added protected Arabic dashboards, CSV and JSON output, and a validation report with no claimed profitability.
+
+## Phase 7 · Mobile access, delivery and data readiness
+
+- Added an installable Arabic PWA, privacy-safe offline shell, mobile navigation and unified operations dashboard.
+- Added expiring Telegram pairing, encrypted browser push subscriptions, independent channel delivery leases and settings.
+- Added CSV and JSON preview, immutable authorized EOD imports, coverage and source diagnostics, and a scheduled private inbox.
+- Added an owner health view and service-manager examples. Real market data and external delivery commissioning remain deployment tasks.

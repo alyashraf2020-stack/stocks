@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { alertCategories } from "@/lib/operations";
+
 import { useEffect, useState } from "react";
 import ScannerNavigation from "@/components/ScannerNavigation";
 import { reason } from "@/lib/risk";
@@ -31,6 +34,10 @@ export default function NotificationsPage() {
     <section dir="rtl" className="mx-auto max-w-4xl space-y-5">
       <h1 className="text-3xl font-bold">التنبيهات</h1>
       <ScannerNavigation />
+      <div className="flex flex-wrap gap-3 text-primary">
+        <Link className="inline-flex min-h-11 items-center underline" href="/settings/notifications">إعدادات التنبيهات</Link>
+        <Link className="inline-flex min-h-11 items-center underline" href="/settings/devices">الأجهزة</Link>
+      </div>
       <div className="flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2"><input type="checkbox" checked={unread} onChange={(e) => setUnread(e.target.checked)} /> غير المقروءة فقط</label>
         <button className="text-primary underline" onClick={() => setRefresh((n) => n + 1)}>تحديث</button>
@@ -39,7 +46,7 @@ export default function NotificationsPage() {
       {alerts && !alerts.length && <p className="text-gray-400">مفيش تنبيهات للعرض.</p>}
       {alerts?.map((alert) => <article key={alert.id} className="space-y-2 rounded-xl border border-surfaceBorder bg-surface p-4">
         <div className="flex flex-wrap justify-between gap-2">
-          <h2 className="font-bold">{categories[alert.category]} {alert.ticker && <bdi>· {alert.ticker}</bdi>}</h2>
+          <h2 className="font-bold">{categories[alert.category] ?? alertCategories[alert.category]} {alert.ticker && <bdi>· {alert.ticker}</bdi>}</h2>
           <span className={alert.severity === "WARNING" || alert.severity === "CRITICAL" ? "text-amber-300" : "text-gray-300"}>{severity[alert.severity]}</span>
         </div>
         <p>{messages[alert.reason] ?? categories[alert.reason] ?? reason(alert.reason)}</p>

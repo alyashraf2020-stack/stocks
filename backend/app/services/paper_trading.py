@@ -250,6 +250,8 @@ def submit(db, key, request, now):
             evidence={"strategy": "MANUAL", "source": "OWNER"},
         )
         persist_orders(db, row, [order])
+        if order.status == "REJECTED":
+            notify(db, now, "PAPER_REJECTED", order.id, request.ticker, order.reason)
         return order.model_dump(mode="json")
 
 
@@ -393,6 +395,17 @@ def process(db, account_id, now):
             not row.automated or row.auto_cursor == horizon.isoformat()
         ):
             return False
+        from app.schemas.market_import import ImportEnvironment
+
+        if ImportEnvironment().EOD_IMPORT_PAPER_FOLLOW:
+            from app.services.market_import import preferred_dataset
+
+            newer = [preferred_dataset(db, item, book.cursor) for item in row.datasets]
+            if newer != row.datasets:
+                from app.services.scanner_repository import digest
+
+                row.datasets = newer
+                ledger(db, row, "dataset:" + digest(newer)[:50], now, "DATASET_UPDATE", {"datasets": newer})
         histories = histories_for(db, row.datasets)
         sectors, screenings = input_context(db, histories)
         policy, profile = load_policy(db), Execution.model_validate(row.execution)
@@ -437,6 +450,8 @@ def process(db, account_id, now):
                     )
                 )
                 ledger(db, row, f"fill:{trade['order_id']}:{day}", now, "FILL", trade)
+                notify(db, now, "PAPER_FILL", [trade["order_id"], day.isoformat()], trade["ticker"],
+                       trade["reason"], trade["price_known_at"])
             for index, (kind, payload) in enumerate(postings):
                 ledger(db, row, f"{day}:{index}:{kind}", now, kind, payload)
             ledger(db, row, f"session:{day}", now, "SESSION", {"day": day.isoformat()})
@@ -519,3 +534,14 @@ def process_batch(factory, now):
                     {"reason": code},
                 )
     return count
+
+
+def notify(db, now, category, identity, ticker=None, reason=None, source_timestamp=None):
+    from app.services.notification_service import emit
+    from app.services.scanner_repository import load_settings
+
+    emit(db, load_settings(db), now.timestamp(), category,
+         "WARNING" if category == "PAPER_REJECTED" else "INFO",
+         {"ticker": ticker, "reason": reason or category, "source_timestamp": source_timestamp,
+          "freshness": "HISTORICAL" if source_timestamp else "UNKNOWN", "limitations": ["VIRTUAL_ONLY"]},
+         identity, "PAPER")

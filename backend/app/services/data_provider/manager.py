@@ -211,6 +211,22 @@ class ProviderManager:
         expected_session_str = expected_session.isoformat()
         english_name = self._security_english_name(db, clean_ticker)
 
+        if db is not None and not force_refresh:
+            from app.services.market_import import approved_series
+
+            approved_id, bars = approved_series(db, clean_ticker, expected_session, now_cairo, limit)
+            if approved_id and (not allow_network or len(bars) >= 50):
+                enough = len(bars) >= 50
+                return {
+                    "status": "SUCCESS" if enough else "INSUFFICIENT_DATA",
+                    "ticker": clean_ticker, "actual_provider": bars[-1]["actual_provider"],
+                    "raw_bars_count": len(bars), "analytical_bars_count": len(bars),
+                    "expected_latest_session": expected_session_str,
+                    "latest_available_session": expected_session_str, "sessions_behind": 0,
+                    "freshness": "CURRENT", "freshness_ar": "محدث",
+                    "current_analysis_eligible": enough, "bars": bars,
+                }
+
         # Keep a validated local-cache baseline even when it is stale. Previously,
         # if every public full-history request failed temporarily, we threw away a
         # perfectly good cached history and returned DATA_UNAVAILABLE / 0 bars.

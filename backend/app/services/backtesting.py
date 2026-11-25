@@ -200,6 +200,11 @@ def finish(db, key, token, now, result=None, error=None):
                     )
             db.add(BacktestResult(id=key, data=result))
             db.add_all(trades)
+        from app.services.notification_service import emit
+
+        category = "BACKTEST_FAILED" if error else "BACKTEST_COMPLETED"
+        emit(db, load_settings(db), now, category, "WARNING" if error else "INFO",
+             {"reason": error or category, "limitations": ["VIRTUAL_ONLY"]}, key, "BACKTEST")
         return True
 
 

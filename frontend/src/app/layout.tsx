@@ -1,9 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@/styles/globals.css";
 import Navbar from "@/components/Navbar";
+import MobileNavigation from "@/components/MobileNavigation";
+import PwaControl from "@/components/PwaControl";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 
+export const viewport: Viewport = { themeColor: "#0b1220", viewportFit: "cover" };
+
 export const metadata: Metadata = {
+  appleWebApp: { capable: true, title: "مساعد EGX", statusBarStyle: "black" },
+  icons: { icon: "/pwa/icon-192.png", apple: "/pwa/apple-touch-icon.png" },
   title: "منصة تداول وتحليل أسهم البورصة المصرية | EGX Analysis",
   description: "منصة تحليل فني ودعم قرار لحظي متخصصة حصراً في أسهم البورصة المصرية وفق قواعد إدارة المخاطر الصارمة وسياسة انعدام التأخير.",
 };
@@ -16,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl">
       <head>
+        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -25,13 +32,14 @@ export default function RootLayout({
       </head>
       <body className="bg-background text-gray-100 min-h-screen flex flex-col font-arabic">
         <Navbar />
+        <PwaControl />
         <DisclaimerBanner />
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {children}
         </main>
         
         {/* Permanent Footer Disclaimer */}
-        <footer className="bg-surface border-t border-surfaceBorder py-6 mt-12 text-center text-xs text-gray-500 space-y-2">
+        <footer className="bg-surface border-t border-surfaceBorder py-6 mt-12 pb-24 text-center md:pb-6 text-xs text-gray-500 space-y-2">
           <p className="font-medium text-gray-400">
             البورصة المصرية (EGX) | منصة دعم القرار والتحليل الفني اللحظي
           </p>
@@ -42,6 +50,7 @@ export default function RootLayout({
             نطاق العمل: أسهم البورصة المصرية فقط | سياسة انعدام التأخير (Zero Session Lag) | صفقات شرائية فقط (Long-Only)
           </p>
         </footer>
+        <MobileNavigation />
       </body>
     </html>
   );

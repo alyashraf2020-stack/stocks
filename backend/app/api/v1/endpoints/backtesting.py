@@ -16,9 +16,8 @@ from app.models.backtest_run import BacktestRun
 from app.models.backtest_trade import BacktestTrade
 from app.schemas.backtesting import BacktestRequest, DatasetUpload
 from app.services import backtesting
-from app.services.backtest_data import dataset_catalog, import_dataset, raw_inventory
+from app.services.backtest_data import dataset_catalog, raw_inventory
 from app.services.scanner_calendar import CAIRO
-from app.services.scanner_repository import writer
 
 router = APIRouter(prefix="/backtesting", dependencies=[Depends(owner)])
 DB = Annotated[Session, Depends(get_db)]
@@ -46,10 +45,15 @@ def datasets(db: DB):
 
 @router.post("/datasets", status_code=201)
 def upload(request: DatasetUpload, db: DB):
-    with writer(db):
-        row = checked(import_dataset, db, request, datetime.now(CAIRO))
-        key, checksum = row.id, row.digest
-    return {"id": key, "digest": checksum}
+    from app.models.backtest_run import SimulationDataset
+    from app.schemas.market_import import ImportFile
+    from app.services.market_import import persist
+
+    receipt = persist(db, ImportFile(format="JSON", content=request.model_dump_json()), datetime.now(CAIRO), "MANUAL")
+    key = receipt.get("dataset_id")
+    if not key:
+        raise HTTPException(429 if receipt["status"] == "QUOTA" else 422, receipt["report"]["error"])
+    return {"id": key, "digest": db.get(SimulationDataset, key).digest}
 
 
 @router.get("/runs")
