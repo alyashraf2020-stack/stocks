@@ -1,5 +1,5 @@
 /* Only these immutable public, credential-free shell contents can be stored. */
-const VERSION = "egx-offline-v1";
+const VERSION = "egx-offline-v2";
 const SHELL = ["/pwa/offline.html", "/pwa/icon-192.png"];
 
 self.addEventListener("install", (event) => {
@@ -52,13 +52,15 @@ self.addEventListener("push", (event) => {
   event.waitUntil(self.registration.showNotification(title, {
     body, icon: "/pwa/icon-192.png", dir: "rtl", lang: "ar-EG",
     tag: /^[a-f0-9]{12,64}$/.test(data.tag ?? "") ? data.tag : "egx-notification",
+    data: {path: data.path === "/orders/proposals" ? "/orders/proposals" : "/notifications"},
   }));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   event.waitUntil((async () => {
-    const target = new URL("/notifications", self.location.origin).href;
+    const path = event.notification.data?.path === "/orders/proposals" ? "/orders/proposals" : "/notifications";
+    const target = new URL(path, self.location.origin).href;
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const client of windows) {
       if (client.url === target && client.focus) return client.focus();

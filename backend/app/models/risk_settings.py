@@ -9,3 +9,4 @@ class RiskSettings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     policy: Mapped[dict] = mapped_column(JSON, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

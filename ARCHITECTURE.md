@@ -67,3 +67,9 @@ Caddy still authenticates owner requests and validates the origin of all writes.
 Independent encrypted destinations extend the original transactional outbox. Channel reservations, attempts, and provider cooldown survive process restarts. Delivery is version-fenced and expiry-aware. Telegram pairs an expiring private chat challenge. Standard Web Push uses a trusted host allowlist and disallows redirects. The heartbeat is written by processes, independent of configuration.
 
 Authorized daily import creates immutable dataset versions and durable receipts. Scanner reads one validated version at a time and increments the completed session window for a new accepted revision. Published historical analyses remain in the database. Paper accounts can explicitly follow consistent subsequent versions while backtests pin every input. The import process only reads a local inbox and does not poll providers. Approved prices never change realtime entitlement.
+
+## Phase 8 local order review
+
+Draft versions, state events and exact local reviews have distinct tables. Expiring hashed challenges are bound to the single owner, a secure browser cookie, the immutable version and current risk revision. Write transactions fence duplicate intent and replay. Emergency-stop changes invalidate active entries in the policy transaction. The scanner may generate bounded draft-only records from new qualifying observations if opted in, and the existing outbox emits review alerts.
+
+Readiness checks are evidence-based and the release gate fails closed. The existing read-only Thndr session and authorization remain distinct from the local drafts. Brokerage status for a local draft is unknown. No broker proposal transport or outgoing queue is registered, and the handoff endpoint rejects the request.

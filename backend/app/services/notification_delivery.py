@@ -53,6 +53,10 @@ TEXT = {
     "PAPER_REJECTED": "أمر افتراضي مرفوض",
     "BACKTEST_COMPLETED": "الاختبار التاريخي خلص",
     "BACKTEST_FAILED": "الاختبار التاريخي تعذّر",
+    "DRAFT_REVIEW": "مسودة محلية للمراجعة",
+    "DRAFT_EXPIRED": "صلاحية مراجعة المسودة انتهت",
+    "DRAFT_PRICE_CHANGED": "سعر المسودة اتغيّر",
+    "DRAFT_BLOCKED": "مسودة محتاجة مراجعة المخاطر",
     "DELIVERY_TEST": "اختبار إشعارات EGX",
 }
 REASONS = {
@@ -458,11 +462,12 @@ def redact(note, detailed, host):
         message = (
             f"{reason}\nالبيانات {basis} · وقت الرصد {when}\nللمراجعة داخل التطبيق."
         )
+    path = "/orders/proposals" if note.category.startswith("DRAFT_") else "/notifications"
     return {
         "title": title,
         "body": message,
-        "path": "/notifications",
-        "url": f"https://{host}/notifications",
+        "path": path,
+        "url": f"https://{host}{path}",
         "tag": note.id,
     }
 
@@ -501,6 +506,16 @@ def claim(db, channel, now, environment):
             target = db.get(DeliveryTarget, row.target_id)
             note = None if row.test else db.get(Notification, row.notification_id)
             expiry = row.created + 300 if row.test else note.expires if note else 0
+            if note and note.category == "DRAFT_REVIEW":
+                from app.models.order_proposal import OrderProposal
+                from app.services.order_proposal_service import invalidate_if_needed
+
+                draft = db.get(OrderProposal, note.payload.get("_draft_id")) if note.payload.get("_draft_id") else None
+                if draft:
+                    invalidate_if_needed(db, draft, datetime.fromtimestamp(now, CAIRO))
+                if not draft or draft.state not in {"BLOCKED", "APPROVAL_REQUIRED"}:
+                    row.status, row.error, row.token, row.lease = "SUPPRESSED", "DRAFT_NO_LONGER_CURRENT", None, None
+                    continue
             invalid = (
                 not target
                 or not target.active

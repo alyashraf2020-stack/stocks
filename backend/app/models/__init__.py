@@ -12,3 +12,6 @@ from app.models.paper_order import PaperOrder
 from app.models.paper_trade import PaperTrade
 from app.models.delivery import ChannelDelivery, ChannelThrottle, DeliverySetting, DeliveryTarget, WorkerPulse
 from app.models.market_import import MarketImport
+from app.models.order_approval import OrderApproval, ReviewChallenge
+from app.models.order_event import OrderEvent
+from app.models.order_proposal import OrderProposal, TradingControl

@@ -11,6 +11,7 @@ export const modules = [
   ["/portfolio", "محفظة ثاندر"], ["/scanner", "ماسح السوق"], ["/watchlist", "قائمة المتابعة"],
   ["/risk", "إدارة المخاطر"], ["/sharia", "الفحص الشرعي"], ["/paper-trading", "التداول الافتراضي"],
   ["/backtesting", "الاختبار التاريخي"], ["/notifications", "التنبيهات"], ["/data", "جاهزية البيانات"],
+  ["/orders", "مسودات الأوامر"], ["/trading-readiness", "جاهزية التداول"], ["/settings/trading", "إعدادات التداول"],
   ["/system", "حالة التشغيل"], ["/settings/integrations", "ربط ثاندر"], ["/settings/scanner", "إعدادات الماسح"],
   ["/settings/notifications", "إعدادات التنبيهات"], ["/settings/devices", "الأجهزة"],
   ["/settings/system", "تثبيت التطبيق والوصول"],

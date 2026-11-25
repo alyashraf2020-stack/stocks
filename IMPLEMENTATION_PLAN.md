@@ -126,3 +126,9 @@ Verification covered 368 offline tests, TypeScript, the production build, and al
 Implemented a mobile installable shell, Arabic operations and data views, encrypted notification destinations, dedicated delivery and optional file import workers, and deployment examples. Financial APIs retain the owner gate. Market data commissioning still needs licensed daily files carrying point-in-time execution fields and an updated reviewed calendar when current coverage expires. Telegram and device delivery require owner configuration and a test on the actual device. Physical device verification and production hosting remain separate operations.
 
 الاختبار شمل 394 اختبار backend، وأربع حالات PWA، وفحص TypeScript وبناء الإنتاج. اتجرّب Chromium بواجهة desktop ومحاكاة لمس بعرض 390px خلف HTTPS. التحقق شمل الـmanifest وعامل الخدمة والتخزين المحدود وعرض صفحة الأوفلاين، مع نبضة عامل الإشعارات من عملية مستقلة. عامل الاستيراد قبل حزمة تجريبية واضحة في قاعدة معزولة. التسليم الفعلي من Telegram وWeb Push يحتاج تهيئة واختبار المالك.
+
+## Phase 8 · مراجعة الأوامر والتشغيل
+
+مسودة الأوامر، والتأكيد المحلي الدقيق، وسجل الحالة، والإشعارات ولوحة الأدلة جاهزين. الوثائق العامة تؤكد أسماء أدوات ثاندر والموافقة المستقلة داخل التطبيق. التكامل الفعلي لاقتراح خارجي يحتاج إثبات منح الأداة للحساب ومخططها الرسمي وقدرة المصالحة قبل أي تشغيل. قابلية الاختبار والجدولة الحالية لا تثبت ربحية أو جاهزية تداول مالي.
+
+Phase 9 تبدأ بتهيئة بوابة خاصة ونسخ احتياطية وفحص OAuth للقراءة على حساب المالك. اطلب عينة سوق مرخصة وراجع تغطية الاختبار، واختبر نقطة تشغيل الإشعارات على الجهاز، ثم أعد تقييم الجاهزية وفق الأدلة. [شروط ثاندر](THNDR_COMMISSIONING.md)

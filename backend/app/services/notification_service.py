@@ -31,6 +31,10 @@ CATEGORIES = frozenset(
         "PAPER_REJECTED",
         "BACKTEST_COMPLETED",
         "BACKTEST_FAILED",
+        "DRAFT_REVIEW",
+        "DRAFT_EXPIRED",
+        "DRAFT_PRICE_CHANGED",
+        "DRAFT_BLOCKED",
     }
 )
 

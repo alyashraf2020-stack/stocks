@@ -70,11 +70,11 @@ test("only the public offline shell is put in storage", async () => {
   const {fire, data, request} = harness();
   await fire("install");
   assert.deepEqual(request, ["/pwa/offline.html", "/pwa/icon-192.png"]);
-  assert.deepEqual([...data.get("egx-offline-v1").keys()], request);
+  assert.deepEqual([...data.get("egx-offline-v2").keys()], request);
   assert.equal(fire("fetch", {request: {method: "GET", url: "https://egx.example/api/v1/portfolio"}}), undefined);
   assert.equal(fire("fetch", {request: {method: "POST", url: "https://egx.example/system"}}), undefined);
   await fire("fetch", {request: {method: "GET", mode: "navigate", url: "https://egx.example/portfolio"}});
-  assert.deepEqual([...data.get("egx-offline-v1").keys()], ["/pwa/offline.html", "/pwa/icon-192.png"]);
+  assert.deepEqual([...data.get("egx-offline-v2").keys()], ["/pwa/offline.html", "/pwa/icon-192.png"]);
 });
 
 test("reject private cache headers; selective update and blank offline shell", async () => {
@@ -99,4 +99,12 @@ test("click only opens the protected same-origin notification view", async () =>
   const {fire, navigations} = harness();
   await fire("notificationclick", {notification: {close() {}, data: {url: "https://untrusted.example"}}});
   assert.deepEqual(navigations, ["https://egx.example/notifications"]);
+});
+
+
+test("the proposal alert destination is also fixed and same-origin", async () => {
+  const {fire, navigations} = harness();
+  await fire("notificationclick", {notification: {close() {}, data: {path: "/orders/proposals"}}});
+  await fire("notificationclick", {notification: {close() {}, data: {path: "//example.org/orders/proposals"}}});
+  assert.deepEqual(navigations, ["https://egx.example/orders/proposals", "https://egx.example/notifications"]);
 });

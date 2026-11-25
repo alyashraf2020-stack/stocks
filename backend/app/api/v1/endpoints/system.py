@@ -28,7 +28,7 @@ from app.services.scanner_health import health
 
 router = APIRouter(prefix="/system", dependencies=[Depends(owner)])
 DB = Annotated[Session, Depends(get_db)]
-SCHEMA = "0005_mobile_operations"
+SCHEMA = "0006_order_review"
 
 
 @router.get("")

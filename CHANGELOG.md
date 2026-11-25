@@ -48,3 +48,9 @@
 - Added expiring Telegram pairing, encrypted browser push subscriptions, independent channel delivery leases and settings.
 - Added CSV and JSON preview, immutable authorized EOD imports, coverage and source diagnostics, and a scheduled private inbox.
 - Added an owner health view and service-manager examples. Real market data and external delivery commissioning remain deployment tasks.
+
+## Phase 8 · Local order proposal review
+
+- Added immutable conditional drafts, exact single-use local review, structured readiness checks, and proposal audit history.
+- Added Arabic owner screens, opt-in scanner drafts and mobile review notifications.
+- Preserved the independently authorized read-only Thndr session and disabled all brokerage handoff in this release.

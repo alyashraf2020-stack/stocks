@@ -160,3 +160,12 @@ For managed operation, supervise the worker with your service manager and captur
 - [المصادر والحقوق واستيراد CSV / JSON](MARKET_DATA_SOURCES.md)
 - [معمارية الإرسال والخصوصية](NOTIFICATION_ARCHITECTURE.md)
 - [نتيجة التحقق من ربحية الاستراتيجية](STRATEGY_VALIDATION.md)
+
+## Phase 8 · مراجعة مسودات الأوامر
+
+من `backend` خُد نسخة احتياطية ثم شغّل `python -m alembic upgrade head`. افتح `/orders` من بوابة HTTPS، أو `/trading-readiness` لأسباب الحجب. التفعيل في `/settings/trading` يخص توليد المسودات فقط. التطبيق لا يطلب إذن إرسال رسمي في الإصدار الحالي.
+
+- [عمل المسودات والمراجعة اليدوية](ORDER_PROPOSALS.md)
+- [أدلة الجاهزية](TRADING_READINESS.md)
+- [وثائق ثاندر والتحقق من الحساب](THNDR_COMMISSIONING.md)
+- [نموذج الأمان](TRADING_SECURITY.md)

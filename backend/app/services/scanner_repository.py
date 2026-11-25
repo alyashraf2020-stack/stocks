@@ -472,6 +472,10 @@ def publish(db, job_id, token, now, data):
                 results=actual,
             )
         )
+        if not error and not policy_changed and market["completed_session"] == job.session:
+            from app.services.order_proposal_service import from_scan
+
+            from_scan(db, job, data["rows"], timestamp)
         job.status = "FAILED" if error else "SUCCEEDED"
         job.error, job.finished, job.token = error, now, None
         return True

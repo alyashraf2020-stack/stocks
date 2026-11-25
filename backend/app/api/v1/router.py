@@ -22,3 +22,8 @@ from app.api.v1.endpoints import market_data, notification_settings, system
 api_router.include_router(notification_settings.router, tags=["Notification delivery"])
 api_router.include_router(market_data.router, tags=["Approved market data"])
 api_router.include_router(system.router, tags=["Owner system health"])
+
+from app.api.v1.endpoints import order_proposals, trading_readiness
+
+api_router.include_router(order_proposals.router, tags=["Local order proposal review"])
+api_router.include_router(trading_readiness.router, tags=["Trading commissioning readiness"])

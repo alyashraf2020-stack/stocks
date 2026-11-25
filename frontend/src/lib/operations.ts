@@ -9,6 +9,7 @@ export const alertCategories: Record<string, string> = {
   PORTFOLIO_RISK: "مخاطر المحفظة", SHARIA_CHANGE: "تغيّر الفحص الشرعي", MARKET_DATA: "بيانات السوق",
   THNDR_CONNECTION: "اتصال ثاندر", SCANNER_FAILURE: "حالة الماسح", KILL_SWITCH: "الإيقاف الطارئ",
   TECHNICAL_CHANGE: "تغيّر فني", PAPER_FILL: "تنفيذ افتراضي", PAPER_REJECTED: "أمر افتراضي مرفوض",
+  DRAFT_REVIEW: "مسودة للمراجعة", DRAFT_EXPIRED: "المسودة انتهت", DRAFT_PRICE_CHANGED: "سعر المسودة اتغير", DRAFT_BLOCKED: "المسودة محجوبة",
   BACKTEST_COMPLETED: "اختبار تاريخي مكتمل", BACKTEST_FAILED: "اختبار تاريخي تعذّر",
 };
 const labels: Record<string, string> = {
@@ -24,6 +25,14 @@ const labels: Record<string, string> = {
   PAIR_RATE_LIMITED: "استنى شوية قبل إعادة التحقق.", TELEGRAM_CREDENTIALS_INVALID: "بيانات البوت غير صالحة.",
   TELEGRAM_RATE_LIMITED: "تيليجرام طلب الانتظار قبل المحاولة التالية.", PUSH_ENDPOINT_UNSUPPORTED: "عنوان خدمة الإشعارات غير مدعوم.",
   PUSH_NOT_CONFIGURED: "إشعارات المتصفح محتاجة إعداد على الخادم.", DEVICE_EXPIRED: "اشتراك الجهاز انتهى.",
+  LIVE_CAPABILITY_DISABLED: "الإرسال الرسمي غير متاح.",
+  REVIEW_CHALLENGE_EXPIRED: "رمز المراجعة انتهت صلاحيته. ابدأ مرة تانية.",
+  REVIEW_BINDING_MISMATCH: "رمز المراجعة مش مرتبط بالنسخة أو بجلستك الحالية.",
+  REVIEW_NO_LONGER_AVAILABLE: "المراجعة دي انتهت أو اتحفظت. حدّث التحليل لو محتاج تراجعه تاني.",
+  DRAFT_FINGERPRINT_CHANGED: "النسخة اتغيّرت. افتح آخر نسخة وراجعها.",
+  DUPLICATE_ACTIVE_INTENT: "في مسودة قائمة للسهم ونفس السيناريو. راجعها أو حدّثها.",
+  AUTHORIZED_PORTFOLIO_UNAVAILABLE: "لقطة ثاندر غير متاحة. زامن الحساب أو اختار تحليل السوق.",
+  INSTRUMENT_IDENTITY_REQUIRED: "السهم لازم يكون مقيد ونشط وله ISIN.",
   SETTINGS_CHANGED: "الإعدادات اتغيرت. حدّث الصفحة وحاول تاني.",
   DESTINATION_NOT_AUTHORIZED: "الجهاز أو المحادثة محتاج ربط وتفعيل.",
   QUIET_HOURS_INVALID: "اختار بداية ونهاية مختلفتين لساعات الهدوء.",

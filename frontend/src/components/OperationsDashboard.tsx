@@ -124,7 +124,7 @@ export default function OperationsDashboard({full = false}: {full?: boolean}) {
             {!(state.opportunities?.length || state.reviews?.length) && <p className="text-sm text-gray-400">مفيش إشارات حالية محفوظة.</p>}
             {[...(state.opportunities ?? []), ...(state.reviews ?? [])].slice(0, 6).map((item) =>
               <p className="text-sm" key={item.ticker}><bdi>{item.ticker}</bdi> · {label(item.category)} {item.sharia && <small>· {label(item.sharia)}</small>}</p>)}
-            <Link href="/opportunities" className={link}>الفرص بالتفصيل</Link>
+            <div className="flex flex-wrap gap-3"><Link href="/opportunities" className={link}>الفرص بالتفصيل</Link><Link href="/orders/proposals" className={link}>مسودات الأوامر</Link></div>
           </>}
         </article>
       </div>

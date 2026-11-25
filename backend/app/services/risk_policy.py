@@ -14,14 +14,20 @@ def load_policy(db):
 def save_policy(db, settings):
     payload = settings.model_dump(mode="json")
     if db.get_bind().dialect.name == "sqlite":
-        statement = insert(RiskSettings).values(id=1, policy=payload)
+        statement = insert(RiskSettings).values(id=1, policy=payload, revision=1)
         db.execute(
             statement.on_conflict_do_update(
-                index_elements=["id"], set_={"policy": payload}
+                index_elements=["id"], set_={"policy": payload, "revision": RiskSettings.revision + 1}
             )
         )
     else:
-        db.merge(RiskSettings(id=1, policy=payload))
+        old = db.get(RiskSettings, 1)
+        db.merge(RiskSettings(id=1, policy=payload, revision=(old.revision if old else 0) + 1))
+    if settings.kill_switch:
+        import time
+        from app.services.order_proposal_service import emergency_entries
+
+        emergency_entries(db, time.time())
     db.commit()
 
 

@@ -129,6 +129,11 @@ def main():
                 with SessionLocal() as db:
                     prune(db, now)
                 last_prune = now
+            from app.services.order_proposal_service import sweep
+            from app.services.scanner_repository import writer
+
+            with SessionLocal() as db, writer(db):
+                sweep(db, datetime.fromtimestamp(now, UTC))
             tick(SessionLocal, now)
             with SessionLocal() as db:
                 job = claim(db, now)
