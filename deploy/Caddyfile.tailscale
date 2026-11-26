@@ -1,0 +1,14 @@
+{
+    admin off
+    persist_config off
+    auto_https off
+    log {
+        level WARN
+        exclude http.log.error
+    }
+}
+
+http://:8788 {
+    bind 127.0.0.1
+    import owner-route.caddy
+}

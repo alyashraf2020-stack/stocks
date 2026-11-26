@@ -54,3 +54,9 @@
 - Added immutable conditional drafts, exact single-use local review, structured readiness checks, and proposal audit history.
 - Added Arabic owner screens, opt-in scanner drafts and mobile review notifications.
 - Preserved the independently authorized read-only Thndr session and disabled all brokerage handoff in this release.
+
+## Phase 9 · Free personal operation
+
+- Added Windows install, start, stop, restart, status, update, backup, restore and rollback launchers, plus optional logon startup.
+- Added a private Tailscale Serve ingress that reuses Caddy owner authentication, Origin checks and cache policy. Personal service environments disable OpenAI.
+- Added Windows runner checks for launchers, loopback-only services, worker restart and backup. Broker writes remain disabled.

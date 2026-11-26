@@ -1,31 +1,3 @@
 https://{$APP_HOST} {
-    route {
-        basic_auth {
-            owner {$OWNER_PASSWORD_HASH}
-        }
-        @untrustedWrite {
-            method POST PUT PATCH DELETE
-            not header Origin https://{$APP_HOST}
-        }
-        respond @untrustedWrite 403
-        @publicShell path /pwa/offline.html /pwa/icon-192.png /pwa/icon-512.png /pwa/apple-touch-icon.png /manifest.webmanifest
-        @privateResponse not path /pwa/offline.html /pwa/icon-192.png /pwa/icon-512.png /pwa/apple-touch-icon.png /manifest.webmanifest
-        header @publicShell >Cache-Control "public, max-age=3600"
-        header @privateResponse >Cache-Control "private, no-store"
-        header {
-            Strict-Transport-Security "max-age=31536000"
-            X-Content-Type-Options nosniff
-            Referrer-Policy no-referrer
-        }
-        @backend path /api/* /docs /docs/* /redoc
-        reverse_proxy @backend {$BACKEND_UPSTREAM:127.0.0.1:8000} {
-            header_up X-EGX-Gateway "{$INTEGRATIONS_GATEWAY_SECRET:unconfigured}"
-            header_up -Authorization
-            header_up -Origin
-        }
-        reverse_proxy {$FRONTEND_UPSTREAM:127.0.0.1:3000} {
-            header_up -X-EGX-Gateway
-            header_up -Authorization
-        }
-    }
+    import owner-route.caddy
 }

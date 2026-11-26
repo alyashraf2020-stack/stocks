@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import secrets
 import shutil
 import socket
+import ssl
 import subprocess
 from threading import Thread
 import time
@@ -50,6 +51,7 @@ def test_gateway_protects_ui_and_api(tmp_path):
            "INTEGRATIONS_GATEWAY_SECRET": gateway}
     source = Path(__file__).resolve().parents[2] / "deploy" / "Caddyfile"
     config = tmp_path / "Caddyfile"
+    shutil.copyfile(source.with_name("owner-route.caddy"), tmp_path / "owner-route.caddy")
     config.write_text("{\n admin off\n auto_https disable_redirects\n skip_install_trust\n}\n" + source.read_text())
     process = subprocess.Popen([caddy, "run", "--config", str(config)], env=env,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -59,12 +61,17 @@ def test_gateway_protects_ui_and_api(tmp_path):
             assert process.poll() is None
             if cert.exists():
                 try:
-                    with socket.create_connection(("127.0.0.1", port), timeout=.1):
-                        break
+                    tls = ssl.create_default_context(cafile=str(cert))
+                    with socket.create_connection(("127.0.0.1", port), timeout=.2) as raw:
+                        with tls.wrap_socket(raw, server_hostname="localhost"):
+                            pass
+                    # The CA can exist before the server certificate is issued.
+                    break
                 except OSError:
                     pass
             time.sleep(.05)
-        import ssl
+        else:
+            pytest.fail("The HTTPS gateway did not finish issuing its local certificate")
         with httpx.Client(base_url=origin, verify=ssl.create_default_context(cafile=str(cert)),
                           trust_env=False) as client:
             for path in ("/", "/api/v1/egx/stocks"):

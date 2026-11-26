@@ -1,0 +1,11 @@
+{
+  "database": "C:/path/to/existing/private/egx_platform.db",
+  "ledger": "C:/path/to/existing/private/ai_usage.sqlite3",
+  "vault": "C:/path/to/existing/private/thndr.enc",
+  "environment": {
+    "THNDR_ENCRYPTION_KEY": "",
+    "NOTIFICATION_ENCRYPTION_KEY": "",
+    "TELEGRAM_ENABLED": "false",
+    "WEB_PUSH_ENABLED": "false"
+  }
+}

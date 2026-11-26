@@ -169,3 +169,7 @@ For managed operation, supervise the worker with your service manager and captur
 - [أدلة الجاهزية](TRADING_READINESS.md)
 - [وثائق ثاندر والتحقق من الحساب](THNDR_COMMISSIONING.md)
 - [نموذج الأمان](TRADING_SECURITY.md)
+
+## Phase 9 · تشغيل شخصي مجاني على Windows
+
+استخدم [دليل تشغيل Windows والموبايل](WINDOWS_PERSONAL_SETUP.md) لربط اللابتوب والموبايل عبر Tailscale Serve، وتشغيل العمال ونسخ SQLite احتياطيًا. التثبيت الشخصي بيستعمل التحليل الحتمي ويوقف استخدام OpenAI. مراجعة المسودات متاحة من الموبايل والاتصال بثاندر للقراءة بيحتاج تفويض المالك وعنوان عودة مقبول.

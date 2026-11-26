@@ -45,3 +45,42 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: /api/v1
           NEXT_TELEMETRY_DISABLED: '1'
+  windows-personal:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install verified Windows Caddy
+        shell: pwsh
+        run: |
+          $release = 'https://github.com/caddyserver/caddy/releases/download/v2.11.9'
+          $archive = 'caddy_2.11.9_windows_amd64.zip'
+          Invoke-WebRequest "$release/$archive" -OutFile "$env:RUNNER_TEMP/$archive"
+          $checksums = "$env:RUNNER_TEMP/egx-caddy-checksums.txt"
+          Invoke-WebRequest "$release/caddy_2.11.9_checksums.txt" -OutFile $checksums
+          $expected = (Get-Content $checksums | Where-Object { $_.TrimEnd().EndsWith(" $archive") }) -split '\s+'
+          $actual = (Get-FileHash -Algorithm SHA512 "$env:RUNNER_TEMP/$archive").Hash
+          if ($actual -ne $expected[0]) { throw 'Caddy archive checksum mismatch' }
+          Expand-Archive "$env:RUNNER_TEMP/$archive" "$env:RUNNER_TEMP/egx-caddy"
+          "$env:RUNNER_TEMP/egx-caddy" >> $env:GITHUB_PATH
+      - name: Test Windows process and gateway contracts
+        working-directory: backend
+        run: |
+          python -m pip install -r requirements-dev.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest -q tests/test_personal_deployment.py
+      - name: Run Windows launcher smoke test
+        shell: pwsh
+        run: ./deploy/windows/Test-Launchers.ps1

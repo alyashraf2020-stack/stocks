@@ -1,5 +1,7 @@
 # تثبيت مساعد EGX على الموبايل
 
+للتشغيل الشخصي المجاني من لابتوب Windows، اتبع [دليل Windows وTailscale](WINDOWS_PERSONAL_SETUP.md). أوامر الخدمات تحت تخص Linux.
+
 ادخل من عنوان بوابة Caddy الـHTTPS الخاص بالمالك. اختبر إن الشهادة موثوقة على الجهاز وإن لوحة `/system` بتعرض قاعدة البيانات والترحيل جاهزين.
 
 | الجهاز | التثبيت |
@@ -18,7 +20,7 @@
 
 أمثلة `deploy/systemd` مبنية على لينكس بمستخدم خدمة `egx`، وكود في `/opt/egx`، وSQLite وبيانات الحالة في `/var/lib/egx` على قرص محلي بملكية مستخدم الخدمة. خزن `private.env` و`gateway.env` في `/etc/egx` بصلاحية 0600. اكتب نفس `INTEGRATIONS_GATEWAY_SECRET` في البيئتين. خلي ثاندر وOpenAI وVAPID وتيليجرام في ملف backend فقط، واسم المضيف وهاش كلمة المرور في ملف البوابة. عيّن `APP_HOST` للـbackend كمان لو هتستخدم روابط الإشعارات.
 
-خد نسخة احتياطية متحققة، ثم شغّل من `backend` بنفس البيئة الخاصة `python -m alembic upgrade head`. ثبّت متطلبات Python وابنِ الواجهة باستخدام `NEXT_PUBLIC_API_URL=/api/v1 npm run build` بعد `npm ci`. انسخ أمثلة الخدمات لـ`/etc/systemd/system` بعد تعديل المسارات حسب الجهاز. استخدم الخدمة الرسمية لـCaddy مع ملف `deploy/Caddyfile` وملف الإضافة `caddy.service.d/egx.conf`.
+خد نسخة احتياطية متحققة، ثم شغّل من `backend` بنفس البيئة الخاصة `python -m alembic upgrade head`. ثبّت متطلبات Python وابنِ الواجهة باستخدام `NEXT_PUBLIC_API_URL=/api/v1 npm run build` بعد `npm ci`. انسخ أمثلة الخدمات لـ`/etc/systemd/system` بعد تعديل المسارات حسب الجهاز. استخدم الخدمة الرسمية لـCaddy مع الملفين `deploy/Caddyfile` و`deploy/owner-route.caddy` في نفس المجلد، وملف الإضافة `caddy.service.d/egx.conf`.
 
 ```sh
 sudo systemctl daemon-reload
