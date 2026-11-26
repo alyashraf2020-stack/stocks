@@ -6,7 +6,8 @@ if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::Re
 }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
 $system = [Security.Principal.SecurityIdentifier]::new("S-1-5-18")
-$acl = Get-Acl -LiteralPath $Path
+$desktop = $PSVersionTable.PSEdition -eq "Desktop"
+$acl = if ($desktop) { $item.GetAccessControl() } else { [IO.FileSystemAclExtensions]::GetAccessControl($item) }
 $acl.SetAccessRuleProtection($true, $false)
 foreach ($rule in $acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier])) {
     $acl.RemoveAccessRuleSpecific($rule)
@@ -16,4 +17,4 @@ foreach ($sid in @($identity, $system)) {
         $sid, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"
     ))
 }
-Set-Acl -LiteralPath $Path -AclObject $acl
+if ($desktop) { $item.SetAccessControl($acl) } else { [IO.FileSystemAclExtensions]::SetAccessControl($item, $acl) }

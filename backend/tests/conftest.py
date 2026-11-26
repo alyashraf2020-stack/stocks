@@ -18,11 +18,13 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_database.as_posix()}"
 
 @pytest.fixture(scope="session", autouse=True)
 def seed_directory():
-    from app.core.database import SessionLocal
+    from app.core.database import SessionLocal, engine
     from app.services.seeder import seed_security_master
 
     with SessionLocal() as db:
         seed_security_master(db)
+    yield
+    engine.dispose()
 
 
 @pytest.fixture

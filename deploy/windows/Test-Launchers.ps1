@@ -56,4 +56,10 @@ try {
     Invoke-Launcher STOP
 } finally {
     & .\STOP.bat ci
+    if (Test-Path "$homePath/logs") {
+        Get-ChildItem "$homePath/logs" -Filter "*.log" | ForEach-Object {
+            Write-Host $_.Name
+            Get-Content -LiteralPath $_.FullName -Tail 15
+        }
+    }
 }
