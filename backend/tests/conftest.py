@@ -19,8 +19,11 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_database.as_posix()}"
 @pytest.fixture(scope="session", autouse=True)
 def seed_directory():
     from app.core.database import SessionLocal, engine
+    from app.models.eodhd import EodhdCandle, EodhdConfig, EodhdSync, EodhdUsage
     from app.services.seeder import seed_security_master
 
+    for model in (EodhdConfig, EodhdUsage, EodhdCandle, EodhdSync):
+        model.__table__.create(engine, checkfirst=True)
     with SessionLocal() as db:
         seed_security_master(db)
     yield

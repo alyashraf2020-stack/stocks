@@ -46,3 +46,4 @@ frontend/next-env.d.ts
 # Encrypted Thndr credentials and snapshots, including a custom data directory.
 thndr.enc
 thndr.enc.lock
+*.eodhd.lock

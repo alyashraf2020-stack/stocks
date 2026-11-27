@@ -27,3 +27,7 @@ from app.api.v1.endpoints import order_proposals, trading_readiness
 
 api_router.include_router(order_proposals.router, tags=["Local order proposal review"])
 api_router.include_router(trading_readiness.router, tags=["Trading commissioning readiness"])
+
+from app.api.v1.endpoints import eodhd
+
+api_router.include_router(eodhd.router, tags=["Free EODHD market data"])

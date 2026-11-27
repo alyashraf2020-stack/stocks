@@ -17,6 +17,8 @@ from app.services.egx_calendar import (
     CAIRO_TZ
 )
 from app.models.candle import EGXCandle
+from app.models.eodhd import EodhdCandle
+from app.services import eodhd_cache
 from app.services.company_profile import get_mbsc_company_profile, get_mpci_company_profile, get_bioc_company_profile
 from app.schemas.stock_plans import StockPlanResponse
 from app.services.stock_plans import StockPlansService
@@ -53,6 +55,18 @@ def get_all_stocks(
                 history.pop()
             summaries[ticker] = (history[-1], len(history))
 
+    ids = {security.ticker: security.isin for security in securities}
+    eodhd = (db.query(EodhdCandle).filter(EodhdCandle.ticker.in_(ids),
+             EodhdCandle.session_date <= expected_session_str)
+             .order_by(EodhdCandle.ticker, EodhdCandle.session_date.desc()).yield_per(500))
+    for ticker, rows in groupby(eodhd, key=lambda row: row.ticker):
+        history = eodhd_cache.contiguous((row for row in rows if row.isin == ids[ticker]), expected_session, 250)
+        latest, size = summaries.get(ticker, ({}, 0))
+        if history and (not latest or history[-1]["session_date"] > latest["session_date"] or (
+            history[-1]["session_date"] == latest["session_date"] and (len(history) >= size or len(history) >= 50)
+        )):
+            summaries[ticker] = (history[-1], len(history))
+
     items = []
     for s in securities:
         sec_dict = s.to_dict()
@@ -61,7 +75,7 @@ def get_all_stocks(
         latest_session = latest.get("session_date")
         actual_provider = latest.get("actual_provider")
         sessions_behind = calculate_sessions_behind(datetime.date.fromisoformat(latest_session)) if latest_session else None
-        freshness_ar = get_freshness_display_ar(sessions_behind)
+        freshness_ar = eodhd_cache.display_freshness(actual_provider, sessions_behind, get_freshness_display_ar(sessions_behind))
 
         sec_dict["latest_close"] = latest_close
         sec_dict["latest_session_date"] = latest_session
@@ -178,7 +192,7 @@ def get_stock_chart(
         "latest_close": sliced_bars[-1]["close"] if sliced_bars else None,
         "sessions_behind": behind,
         "freshness": get_freshness_label(behind),
-        "freshness_ar": get_freshness_display_ar(behind),
+        "freshness_ar": eodhd_cache.display_freshness(bars[-1].get("actual_provider"), behind, get_freshness_display_ar(behind)),
         "actual_provider": bars[-1].get("actual_provider"),
         "bars": sliced_bars,
         "range_change_pct": round(100 * (sliced_bars[-1]["close"] / anchor["close"] - 1), 4),

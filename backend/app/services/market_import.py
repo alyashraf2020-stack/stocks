@@ -208,9 +208,17 @@ def generation(db, reference):
 
 
 def scan_window(db, settings, reference, *, scheduled=True):
+    from app.models.eodhd import EodhdCandle
+
     key = f"{settings.revision}:{settings.mode}:{reference}"
     version = generation(db, reference) if scheduled else None
-    return f"{key}:import:{version}" if version is not None else key
+    if version is not None:
+        key += f":import:{version}"
+    if scheduled:
+        fetched = db.scalar(select(func.max(EodhdCandle.fetched)).where(EodhdCandle.session_date == reference))
+        if fetched is not None:
+            key += f":eodhd:{int(fetched // 3600)}"
+    return key
 
 
 def approved_series(db, ticker, through, now, max_bars=250):
@@ -316,6 +324,7 @@ def preferred_dataset(db, old_id, cursor):
 
 def readiness(db, now):
     from app.models.candle import EGXCandle
+    from app.models.eodhd import EodhdCandle
     from app.services.data_provider.manager import default_provider_manager
     from app.services.scanner_calendar import COVERAGE, VERSION
 
@@ -327,7 +336,7 @@ def readiness(db, now):
             .order_by(EGXSecurity.ticker)
         )
     )
-    raw = set(db.scalars(select(EGXCandle.ticker).distinct()))
+    raw = set(db.scalars(select(EGXCandle.ticker).union(select(EodhdCandle.ticker))))
     approved = list(
         db.scalars(
             select(SimulationDataset)

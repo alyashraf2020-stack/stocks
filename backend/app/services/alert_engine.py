@@ -29,6 +29,7 @@ def symbol_alerts(db, settings, now, row, prior, fingerprint, broker_sync=None):
             {
                 "ticker": row["ticker"],
                 "source_timestamp": obs.get("source_timestamp"),
+                "provider": obs.get("provider"),
                 "freshness": obs.get("freshness", "UNKNOWN"),
                 "reason": reason,
                 "_broker_sync": broker_sync,

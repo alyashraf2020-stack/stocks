@@ -1,4 +1,5 @@
 import { DataLinks } from "@/components/MarketReadiness";
+import EodhdSettings from "@/components/EodhdSettings";
 import { opsPanel } from "@/lib/operations";
 
 const sources = [
@@ -13,7 +14,8 @@ const sources = [
 export default function Page() {
   return <section dir="rtl" className="space-y-5">
     <h1 className="text-3xl font-bold">مزوّدين بيانات البورصة</h1><DataLinks/>
-    <p className="text-amber-300">التشغيل الحالي بالملفات المصرح بيها. مفيش مزوّد خارجي مفعّل للسحب الآلي أو للبيانات اللحظية.</p>
+    <p className="text-amber-300">المصادر اللحظية المؤهلة للتنفيذ بتحتاج ترخيص وحقول تحقق مستقلة.</p>
+    <EodhdSettings />
     <div className="grid gap-3 sm:grid-cols-2">{sources.map(([name, summary, url]) =>
       <article className={opsPanel} key={name}><h2 className="font-bold"><bdi>{name}</bdi></h2>
         <p className="text-sm">{summary}</p><a className="inline-flex min-h-11 items-center text-primary underline" href={url}

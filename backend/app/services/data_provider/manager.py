@@ -8,6 +8,7 @@ from app.services.data_provider.investing_provider import InvestingHistoricalPro
 from app.services.data_provider.investing_legacy_provider import InvestingLegacySearchProvider
 from app.services.data_provider.stooq_provider import StooqEGXProvider
 from app.services.validator import CandleValidator, completed_analytical_bars
+from app.services import eodhd_cache
 from app.services.egx_calendar import (
     get_expected_latest_completed_session,
     calculate_sessions_behind,
@@ -236,6 +237,22 @@ class ProviderManager:
         cached_baseline_bars: List[Dict[str, Any]] = []
         cached_baseline_provider: Optional[str] = None
         cached_baseline_sessions_behind: Optional[int] = None
+        provider_bars = eodhd_cache.history(db, clean_ticker, expected_session, limit) if db is not None else []
+
+        def eodhd_result(bars):
+            latest = datetime.date.fromisoformat(bars[-1]["session_date"])
+            lag = len(self._missing_completed_sessions(latest, expected_session))
+            enough = len(bars) >= 50
+            return {
+                "status": "DATA_NOT_CURRENT" if lag else "SUCCESS" if enough else "INSUFFICIENT_DATA",
+                "ticker": clean_ticker, "actual_provider": eodhd_cache.PROVIDER,
+                "raw_bars_count": len(bars), "analytical_bars_count": len(bars),
+                "expected_latest_session": expected_session_str,
+                "latest_available_session": latest.isoformat(), "sessions_behind": lag,
+                "freshness": get_freshness_label(lag),
+                "freshness_ar": eodhd_cache.display_freshness(eodhd_cache.PROVIDER, lag, ""),
+                "current_analysis_eligible": not lag and enough, "bars": bars,
+            }
 
         suspect = None
         if db is not None and not force_refresh:
@@ -275,6 +292,8 @@ class ProviderManager:
                     cached_baseline_sessions_behind = calculate_sessions_behind(cached_latest_date, now_cairo)
 
                 if cached_baseline_sessions_behind == 0 and (len(cached_validated) >= 50 or not allow_network):
+                    if eodhd_cache.prefer(provider_bars, cached_validated):
+                        return eodhd_result(provider_bars)
                     has_min_history = len(cached_validated) >= 50
                     is_eligible = has_min_history
                     status = "SUCCESS" if is_eligible else "INSUFFICIENT_DATA"
@@ -300,7 +319,12 @@ class ProviderManager:
         best_provider: Optional[str] = cached_baseline_provider
         best_sessions_behind: Optional[int] = cached_baseline_sessions_behind
 
+        if provider_bars and provider_bars[-1]["session_date"] == expected_session_str and len(provider_bars) >= 50:
+            return eodhd_result(provider_bars)
+
         if not allow_network:
+            if eodhd_cache.prefer(provider_bars, best_bars):
+                return eodhd_result(provider_bars)
             return {
                 "status": "DATA_NOT_CURRENT" if best_bars else "DATA_UNAVAILABLE",
                 "ticker": clean_ticker,
@@ -419,6 +443,9 @@ class ProviderManager:
                     unique_recovered = list(dict.fromkeys(recovered_providers))
                     base_provider = best_provider or "Cached EOD history"
                     best_provider = base_provider + " + " + " + ".join(unique_recovered)
+
+        if eodhd_cache.prefer(provider_bars, best_bars):
+            return eodhd_result(provider_bars)
 
         if not best_bars:
             return {

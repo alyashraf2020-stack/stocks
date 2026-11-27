@@ -129,7 +129,7 @@ export default function StockDetailPage() {
     );
   }
 
-  const isCurrent = chartData?.sessions_behind === 0;
+  const isCurrent = (chartData?.sessions_behind ?? stock?.sessions_behind) === 0;
 
   return (
     <div className="space-y-6">
@@ -210,7 +210,7 @@ export default function StockDetailPage() {
             {isCurrent ? (
               <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>محدث</span>
+                <span>{(chartData?.actual_provider ?? stock.actual_provider) === "EODHD" ? "إغلاق يومي متحقّق" : "محدث"}</span>
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-400">

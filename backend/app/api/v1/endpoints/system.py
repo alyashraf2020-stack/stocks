@@ -13,6 +13,7 @@ from app.core.database import get_db
 from app.models.backtest_run import BacktestRun, SimulationDataset
 from app.models.candle import EGXCandle
 from app.models.delivery import DeliveryTarget, WorkerPulse
+from app.models.eodhd import EodhdCandle
 from app.models.market_import import MarketImport
 from app.models.market_scan import MarketScan
 from app.models.notification import Notification
@@ -28,7 +29,7 @@ from app.services.scanner_health import health
 
 router = APIRouter(prefix="/system", dependencies=[Depends(owner)])
 DB = Annotated[Session, Depends(get_db)]
-SCHEMA = "0006_order_review"
+SCHEMA = "0007_eodhd"
 
 
 @router.get("")
@@ -99,7 +100,8 @@ async def system(db: DB):
         .order_by(MarketImport.id.desc())
         .limit(1)
     )
-    raw_tickers = db.scalar(select(func.count(func.distinct(EGXCandle.ticker))))
+    raw = select(EGXCandle.ticker).union(select(EodhdCandle.ticker))
+    raw_tickers = db.scalar(select(func.count()).select_from(raw.subquery()))
     approved = db.scalar(
         select(func.count())
         .select_from(SimulationDataset)
@@ -108,10 +110,9 @@ async def system(db: DB):
     session_day = market["completed_session"]
     current_raw = (
         db.scalar(
-            select(func.count(func.distinct(EGXCandle.ticker))).where(
-                EGXCandle.session_date == session_day,
-                EGXCandle.validation_status == "VALID",
-            )
+            select(func.count()).select_from(select(EGXCandle.ticker).where(
+                EGXCandle.session_date == session_day, EGXCandle.validation_status == "VALID",
+            ).union(select(EodhdCandle.ticker).where(EodhdCandle.session_date == session_day)).subquery())
         )
         if session_day
         else 0

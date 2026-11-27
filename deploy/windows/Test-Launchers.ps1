@@ -2,7 +2,7 @@
 $ErrorActionPreference = "Stop"
 $source = (Get-Location).Path
 $target = (git rev-parse HEAD).Trim()
-$checkpoint = "e507cb3665af0a191c55f7db62475cc063dd9c40"
+$checkpoint = "93507bcba64077bc1163e153a96c6d4126ac9a9b"
 $branch = "feature/ai-trading-assistant"
 $sourceRef = "refs/heads/$branch"
 git update-ref $sourceRef $target
@@ -44,7 +44,7 @@ function Check-Release([string]$Commit, [string]$NextVersion) {
 Push-Location $legacy
 try {
     Invoke-Launcher INSTALL
-    Check-Release $checkpoint "14.2.35"
+    Check-Release $checkpoint "16.4.6"
     @'
 import json
 from contextlib import closing
@@ -104,7 +104,7 @@ key = config["environment"]["THNDR_ENCRYPTION_KEY"]
     Invoke-Launcher UPDATE
     Check-Release $target "16.4.6"
     $health = Invoke-RestMethod $system -Headers $headers
-    if ($health.migration.current -ne "0006_order_review" -or -not $health.migration.ready) {
+    if ($health.migration.current -ne "0007_eodhd" -or -not $health.migration.ready) {
         throw "Unexpected SQLite schema"
     }
     if (-not $health.policy.kill_switch -or -not $health.policy.islamic -or $health.ai.status -ne "DISABLED") {
@@ -121,6 +121,10 @@ key = config["environment"]["THNDR_ENCRYPTION_KEY"]
     }
     $readiness = Invoke-RestMethod "$api/trading-readiness" -Headers $headers
     if ($readiness.broker_handoff -ne $false) { throw "Broker execution must be disabled" }
+    $eodhd = Invoke-RestMethod "$api/data/eodhd" -Headers $headers
+    if ($eodhd.enabled -or $eodhd.configured -or $eodhd.limit -ne 20 -or $eodhd.reserved -ne 0) {
+        throw "EODHD must start disconnected and unused after the upgrade"
+    }
     @'
 from contextlib import closing
 import json
@@ -133,7 +137,7 @@ with closing(sqlite3.connect(root / "data/ai_usage.sqlite3")) as ledger:
 pointer = json.loads((root / "current.json").read_text())
 backup = root / "backups" / pointer["backup"]
 manifest = json.loads((backup / "manifest.json").read_text())
-assert manifest["release"].startswith("e507cb3")
+assert manifest["release"].startswith("93507bc")
 assert {"market.db", "ai_usage.sqlite3", "thndr.enc"} <= set(manifest["files"])
 assert len(list((root / "backups").glob("*/manifest.json"))) >= 3
 '@ | python - $homePath
@@ -143,7 +147,7 @@ assert len(list((root / "backups").glob("*/manifest.json"))) >= 3
     $password = ConvertTo-SecureString "ephemeral-ci-owner-password" -AsPlainText -Force
     $owner = [PSCredential]::new("owner", $password)
     $gateway = "http://127.0.0.1:8788"
-    foreach ($route in @("/", "/stocks/COMI", "/backtesting/results/1",
+    foreach ($route in @("/", "/data/providers", "/stocks/COMI", "/backtesting/results/1",
         "/orders/proposals/00000000-0000-4000-8000-000000000001", "/sw.js")) {
         $response = Invoke-WebRequest "$gateway$route" -Authentication Basic -Credential $owner -AllowUnencryptedAuthentication
         if ($response.StatusCode -ne 200 -or $response.Headers["Cache-Control"] -notmatch "no-store") {

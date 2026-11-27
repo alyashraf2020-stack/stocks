@@ -119,6 +119,7 @@ def main():
         signal.signal(name, lambda *_: stop.set())
     worker = uuid4().hex
     last_prune = 0
+    next_eodhd = 0
     LOG.info("scanner worker started")
     while not stop.is_set():
         now = time.time()
@@ -134,6 +135,11 @@ def main():
 
             with SessionLocal() as db, writer(db):
                 sweep(db, datetime.fromtimestamp(now, UTC))
+            if now >= next_eodhd:
+                from app.services.eodhd import automatic
+
+                automatic(SessionLocal, datetime.fromtimestamp(now, UTC))
+                next_eodhd = now + 60
             tick(SessionLocal, now)
             with SessionLocal() as db:
                 job = claim(db, now)

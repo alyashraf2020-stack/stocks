@@ -15,3 +15,4 @@ from app.models.market_import import MarketImport
 from app.models.order_approval import OrderApproval, ReviewChallenge
 from app.models.order_event import OrderEvent
 from app.models.order_proposal import OrderProposal, TradingControl
+from app.models.eodhd import EodhdCandle, EodhdConfig, EodhdSync, EodhdUsage

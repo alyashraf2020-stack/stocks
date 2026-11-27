@@ -173,3 +173,7 @@ For managed operation, supervise the worker with your service manager and captur
 ## Phase 9 · تشغيل شخصي مجاني على Windows
 
 استخدم [دليل تشغيل Windows والموبايل](WINDOWS_PERSONAL_SETUP.md) لربط اللابتوب والموبايل عبر Tailscale Serve، وتشغيل العمال ونسخ SQLite احتياطيًا. التثبيت الشخصي بيستعمل التحليل الحتمي ويوقف استخدام OpenAI. مراجعة المسودات متاحة من الموبايل والاتصال بثاندر للقراءة بيحتاج تفويض المالك وعنوان عودة مقبول.
+
+### EODHD Free
+
+Set up personal EGX daily bars from the private provider settings page. [EODHD configuration, usage and freshness](EODHD_SETUP.md)

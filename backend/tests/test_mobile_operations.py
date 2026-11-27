@@ -66,7 +66,7 @@ def factory(tmp_path):
         )
         db.execute(text("CREATE TABLE alembic_version (version_num TEXT PRIMARY KEY)"))
         db.execute(
-            text("INSERT INTO alembic_version VALUES ('0006_order_review')")
+            text("INSERT INTO alembic_version VALUES ('0007_eodhd')")
         )
         db.commit()
     yield make

@@ -126,7 +126,7 @@ export interface Results {
 }
 
 export interface Alert {
-  id: string; category: string; severity: string; ticker?: string; created: number;
+  id: string; category: string; severity: string; ticker?: string; created: number; provider?: string | null;
   source_timestamp: string | null; freshness: Freshness; reason: string; limitations: string[];
   read_at: number | null; acknowledged_at: number | null; requires_recheck: boolean;
 }

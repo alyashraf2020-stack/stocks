@@ -20,6 +20,7 @@ from app.services.ai_context_builder import build_analysis
 from app.services.ai_decision_engine import explain
 from app.services.ai_opportunities import rank
 from app.services.corporate_events import CorporateEventService
+from app.services import eodhd_cache
 from app.services.portfolio_risk import brokerage_snapshot, dec, summarize
 from app.services.risk_policy import entry_blocks, load_policy
 from app.services.scanner_calendar import CAIRO, calendar_at, hours
@@ -242,6 +243,9 @@ def evaluate(db, ticker, settings, context):
     from app.services.market_import import approved_series
 
     approved_version, approved_bars = approved_series(db, ticker, expected, now)
+    provider_bars = eodhd_cache.history(db, ticker, expected)
+    if provider_bars:
+        fingerprint = digest([fingerprint, provider_bars])
     if approved_version:
         fingerprint = digest([fingerprint, approved_version])
     prior = db.get(TradingSignal, (scope, ticker))
@@ -264,6 +268,8 @@ def evaluate(db, ticker, settings, context):
     observed = observations(report, expected, security, now, market)
     if approved_bars and report.provider == approved_bars[-1]["actual_provider"]:
         observed["source_available_at"] = approved_bars[-1].get("available_at")
+    if report.provider == eodhd_cache.PROVIDER and provider_bars:
+        observed["retrieval_timestamp"] = provider_bars[-1]["retrieved_at"]
     report.price_timestamp = (
         datetime.fromisoformat(observed["source_timestamp"])
         if observed["source_timestamp"]

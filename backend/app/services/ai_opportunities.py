@@ -3,6 +3,7 @@
 from sqlalchemy import select
 
 from app.models.candle import EGXCandle
+from app.models.eodhd import EodhdCandle
 from app.models.market_import import MarketImport
 from app.models.security import EGXSecurity
 from app.schemas.ai_analysis import AnalysisRequest
@@ -51,7 +52,8 @@ def rank(report):
 def opportunities(db, portfolio=None):
     session = get_expected_latest_completed_session().isoformat()
     tickers = select(EGXCandle.ticker).where(EGXCandle.session_date == session).union(
-        select(MarketImport.ticker).where(MarketImport.session == session)
+        select(MarketImport.ticker).where(MarketImport.session == session),
+        select(EodhdCandle.ticker).where(EodhdCandle.session_date == session),
     )
     securities = db.scalars(
         select(EGXSecurity).where(

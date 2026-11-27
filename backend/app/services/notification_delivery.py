@@ -441,6 +441,8 @@ def redact(note, detailed, host):
             else ""
         )
         basis = FRESH.get(data.get("freshness"), "غير متاحة")
+        if data.get("provider") == "EODHD" and data.get("freshness") == "HISTORICAL":
+            basis = "إغلاق يومي متحقّق من EODHD"
         reason = REASONS.get(
             data.get("reason"), TEXT.get(note.category, "راجع التفاصيل")
         )

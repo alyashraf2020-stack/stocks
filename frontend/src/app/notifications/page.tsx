@@ -50,7 +50,7 @@ export default function NotificationsPage() {
           <span className={alert.severity === "WARNING" || alert.severity === "CRITICAL" ? "text-amber-300" : "text-gray-300"}>{severity[alert.severity]}</span>
         </div>
         <p>{messages[alert.reason] ?? categories[alert.reason] ?? reason(alert.reason)}</p>
-        <p className="text-sm text-gray-400">اتسجّل {scannerTime(alert.created)} · وقت المصدر {scannerTime(alert.source_timestamp)} · {freshnessLabel[alert.freshness]}</p>
+        <p className="text-sm text-gray-400">اتسجّل {scannerTime(alert.created)} · وقت الرصد {scannerTime(alert.source_timestamp)} · {alert.provider === "EODHD" && alert.freshness === "HISTORICAL" ? "إغلاق يومي متحقّق من EODHD" : freshnessLabel[alert.freshness]}</p>
         {alert.requires_recheck && <p className="text-sm text-amber-300">مراجعة تاريخية. راجع الأسعار والقواعد الحالية قبل الاعتماد على الإشارة.</p>}
         {alert.limitations.filter((code) => !["REVIEW_ONLY", "NO_VERIFIED_LIVE_SESSION"].includes(code)).map((code) => <p key={code} className="text-sm text-gray-400">{messages[code] ?? reason(code)}</p>)}
         <div className="flex gap-4 text-sm text-primary">

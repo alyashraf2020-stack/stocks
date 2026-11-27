@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import ScannerNavigation from "@/components/ScannerNavigation";
 import { ScannerSettings, scannerRequest } from "@/lib/scanner";
@@ -32,7 +33,8 @@ export default function WatchlistPage() {
       <h1 className="text-3xl font-bold">قائمة المتابعة</h1>
       <ScannerNavigation />
       <p className="text-gray-400">رتّب الرموز حسب أولويتك. مسح السوق بيبدأ بالقائمة دي لو الجولة لها حد أقصى.</p>
-      {error && <p role="alert" className="text-amber-300">{error}</p>}
+      <Link className="text-primary underline" href="/data/providers#eodhd">مزامنة إغلاقات قائمة المتابعة عبر EODHD</Link>
+    {error && <p role="alert" className="text-amber-300">{error}</p>}
       {message && <p role="status">{message}</p>}
       {settings && <form onSubmit={submit} className="space-y-4 rounded-xl border border-surfaceBorder bg-surface p-4">
         <label className="block">رموز الأسهم
