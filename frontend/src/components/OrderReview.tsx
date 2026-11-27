@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { numberLabel, ops, opsButton, opsField, opsOutline, opsPanel, timeLabel } from "@/lib/operations";
 import { activeStates, checks, intents, modeLabels, orderLabel } from "@/lib/orderReview";
 
@@ -177,6 +178,7 @@ export function ProposalList({history = false}: {history?: boolean}) {
 }
 
 export function ProposalDetail({id}: {id: string}) {
+  const router = useRouter();
   const [draft, setDraft] = useState<Draft>();
   const [events, setEvents] = useState<Event[]>([]);
   const [consent, setConsent] = useState(false);
@@ -184,12 +186,12 @@ export function ProposalDetail({id}: {id: string}) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const path = "orders/proposals/" + id;
-  async function reload() {
+  const reload = useCallback(async () => {
     const data = await ops<Draft>(path);
     setDraft(data);
     setEvents(await ops<Event[]>(path + "/events"));
-  }
-  useEffect(() => {void reload().catch((why: Error) => setError(why.message));}, [id]);
+  }, [path]);
+  useEffect(() => {void reload().catch((why: Error) => setError(why.message));}, [reload]);
   async function act(action: () => Promise<void>) {
     setBusy(true);setError("");
     try {await action();}
@@ -239,7 +241,7 @@ export function ProposalDetail({id}: {id: string}) {
           {d.state !== "CANCELLED" && <button className={opsOutline} disabled={busy} onClick={() => void act(async () => {
             const updated = await ops<Draft>(path + "/refresh", {key: crypto.randomUUID(), ticker: d.ticker, intent: d.intent,
               source: d.source, shares: d.requested_shares, limit: d.requested_limit ?? null});
-            window.location.assign("/orders/proposals/" + updated.id);
+            router.push("/orders/proposals/" + encodeURIComponent(updated.id));
           })}>حدّث التحليل</button>}
           {activeStates.includes(d.state) && <button className={opsOutline} disabled={busy} onClick={() => void act(async () => {
             await ops(path + "/reject", {});setChallenge(undefined);await reload();

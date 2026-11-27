@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { TrendingUp, CheckCircle2, AlertCircle } from "lucide-react";
 import { postLiveAnalysis, getStockDetail } from "@/lib/api";
@@ -49,9 +49,11 @@ function LiveAnalysisContent() {
   const [previousPlan, setPreviousPlan] = useState<TradePlan | null>(null);
 
   const selectedStockRef = useRef<Stock | null>(selectedStock);
-  selectedStockRef.current = selectedStock;
   const resultRef = useRef<LiveAnalysisResult | null>(result);
-  resultRef.current = result;
+  useLayoutEffect(() => {
+    selectedStockRef.current = selectedStock;
+    resultRef.current = result;
+  }, [selectedStock, result]);
 
   const resetAnalysisResult = React.useCallback(() => {
     setResult(null);

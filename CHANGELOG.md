@@ -1,5 +1,11 @@
 # Changelog
 
+## Security update · Next.js 16 and React 19
+
+- Updated Next.js to 16.4.6 and React/React DOM to 19.3.1. Updated PostCSS and resolved patched `source-map-js` and `postcss-selector-parser` releases within their supported ranges.
+- Migrated dynamic App Router page parameters, generated route types, and replaced the removed `next lint` command with ESLint flat config.
+- Added production and full dependency audits on Node.js 22 and 24. Windows CI installs the previous personal release and upgrades it through the original `UPDATE.bat`, checking saved settings, the encrypted vault, SQLite and backups.
+
 ## AI trading assistant foundation
 
 - Recorded the baseline audit and official Thndr/OpenAI integration constraints.

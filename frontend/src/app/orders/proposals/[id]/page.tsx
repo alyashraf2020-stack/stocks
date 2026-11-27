@@ -1,2 +1,5 @@
 import { ProposalDetail } from "@/components/OrderReview";
-export default function Page({params}: {params: {id: string}}) { return <ProposalDetail id={params.id}/>; }
+export default async function Page({ params }: PageProps<"/orders/proposals/[id]">) {
+  const { id } = await params;
+  return <ProposalDetail key={id} id={id} />;
+}

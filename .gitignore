@@ -41,6 +41,7 @@ backups/
 *.sqlite3-*
 .egx-backup-*
 *.tsbuildinfo
+frontend/next-env.d.ts
 
 # Encrypted Thndr credentials and snapshots, including a custom data directory.
 thndr.enc

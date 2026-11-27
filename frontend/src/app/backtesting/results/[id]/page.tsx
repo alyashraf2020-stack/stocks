@@ -1,4 +1,5 @@
 import { BacktestDetail } from "@/components/BacktestingDashboard";
-export default function Page({ params }: { params: { id: string } }) {
-  return <BacktestDetail id={params.id} />;
+export default async function Page({ params }: PageProps<"/backtesting/results/[id]">) {
+  const { id } = await params;
+  return <BacktestDetail id={id} />;
 }
