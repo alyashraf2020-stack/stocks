@@ -352,11 +352,24 @@ def test_incremental_refresh_counts_only_missing_rows_and_wakes_scanner(factory)
         before = scan_window(db, ScannerSettings(), upcoming.isoformat())
         db.rollback()
         assert sync(db, Incremental(), clock=lambda: timestamp)["added"] == 1
-        assert scan_window(db, ScannerSettings(), upcoming.isoformat()) != before
+        after = scan_window(db, ScannerSettings(), upcoming.isoformat())
+        assert after != before
         assert (
             db.scalar(select(func.count()).select_from(EodhdCandle))
             == len(sample()) + 1
         )
+        db.add(equity("COMI", "EGS60121C018"))
+        db.add(
+            EodhdCandle(
+                ticker="COMI",
+                session_date=upcoming.isoformat(),
+                isin="EGS60121C018",
+                fetched=timestamp.timestamp(),
+                bar={},
+            )
+        )
+        db.commit()
+        assert scan_window(db, ScannerSettings(), upcoming.isoformat()) != after
 
 
 def test_utc_boundary_does_not_issue_billable_request(factory):

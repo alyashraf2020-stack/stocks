@@ -215,9 +215,13 @@ def scan_window(db, settings, reference, *, scheduled=True):
     if version is not None:
         key += f":import:{version}"
     if scheduled:
-        fetched = db.scalar(select(func.max(EodhdCandle.fetched)).where(EodhdCandle.session_date == reference))
-        if fetched is not None:
-            key += f":eodhd:{int(fetched // 3600)}"
+        # Inserts are append-only. A second symbol syncing within the same hour
+        # must also make its completed candle visible to the scanner.
+        count = db.scalar(select(func.count()).select_from(EodhdCandle).where(
+            EodhdCandle.session_date == reference
+        ))
+        if count:
+            key += f":eodhd:{count}"
     return key
 
 
